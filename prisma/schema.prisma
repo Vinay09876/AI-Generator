@@ -1,4 +1,3 @@
-
 generator client {
   provider = "prisma-client"
   output   = "../src/generated/prisma"
@@ -47,13 +46,13 @@ model User {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
-  accounts      Account[]
-  sessions      Session[]
-  wallet        CreditWallet?
-  transactions  CreditTransaction[]
-  jobs          GenerationJob[]
-  assets        GeneratedAsset[]
-  usageLogs     UsageLog[]
+  accounts     Account[]
+  sessions     Session[]
+  wallet       CreditWallet?
+  transactions CreditTransaction[]
+  jobs         GenerationJob[]
+  assets       GeneratedAsset[]
+  usageLogs    UsageLog[]
 }
 
 model Account {
@@ -115,48 +114,70 @@ model CreditTransaction {
   balanceAfter   Int
   description    String?
   idempotencyKey String                @unique
+  /// Generation job this debit/refund belongs to (null for grants, purchases, adjustments).
+  jobId          String?
   createdAt      DateTime              @default(now())
 
-  user   User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  wallet CreditWallet @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  user   User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  wallet CreditWallet   @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  job    GenerationJob? @relation(fields: [jobId], references: [id], onDelete: SetNull)
 
   @@index([userId, createdAt])
   @@index([walletId, createdAt])
+  @@index([jobId])
 }
 
 model GenerationJob {
-  id                String           @id @default(cuid())
-  userId            String
-  type              GenerationType
-  status            GenerationStatus @default(PENDING)
-  prompt            String?          @db.Text
-  provider          String?
-  providerJobId     String?
-  estimatedCredits  Int              @default(0)
-  chargedCredits    Int              @default(0)
-  errorMessage      String?          @db.Text
-  createdAt         DateTime         @default(now())
-  updatedAt         DateTime         @updatedAt
-  completedAt       DateTime?
+  id               String           @id @default(cuid())
+  userId           String
+  type             GenerationType
+  status           GenerationStatus @default(PENDING)
+  prompt           String?          @db.Text
+  provider         String?
+  providerJobId    String?
+  estimatedCredits Int              @default(0)
+  chargedCredits   Int              @default(0)
+  errorMessage     String?          @db.Text
+  /// Client-supplied key; a retried submission returns the existing job instead of creating a new one.
+  idempotencyKey   String?
+  /// Provider model identifier, e.g. "@cf/black-forest-labs/flux-1-schnell".
+  model            String?
+  /// Validated generation settings (e.g. { "quality": "fast", "steps": 4 }).
+  settings         Json?
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  /// Set when the provider request starts; used to detect stuck jobs.
+  startedAt        DateTime?
+  completedAt      DateTime?
 
-  user   User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  assets GeneratedAsset[]
-  usage  UsageLog[]
+  user               User                       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  assets             GeneratedAsset[]
+  usage              UsageLog[]
+  creditTransactions CreditTransaction[]
+  budgetReservation  ProviderBudgetReservation?
+  // Also enforced in migration SQL (not expressible in Prisma schema):
+  // partial unique index "GenerationJob_one_active_per_user" on ("userId") WHERE status IN ('PENDING','PROCESSING').
 
+  @@unique([provider, providerJobId])
+  @@unique([userId, idempotencyKey])
   @@index([userId, createdAt])
   @@index([status, createdAt])
-  @@unique([provider, providerJobId])
 }
 
 model GeneratedAsset {
-  id        String    @id @default(cuid())
-  userId    String
-  jobId     String
-  type      AssetType
-  fileUrl   String    @db.Text
-  mimeType  String?
-  fileSize  BigInt?
-  createdAt DateTime  @default(now())
+  id         String    @id @default(cuid())
+  userId     String
+  jobId      String
+  type       AssetType
+  /// Deprecated for private storage: use storageKey + short-lived signed URLs instead.
+  fileUrl    String?   @db.Text
+  /// Object key inside the private storage bucket, e.g. "users/{userId}/images/{jobId}/{assetId}.webp".
+  storageKey String
+  width      Int?
+  height     Int?
+  mimeType   String?
+  fileSize   BigInt?
+  createdAt  DateTime  @default(now())
 
   user User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   job  GenerationJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
@@ -166,19 +187,71 @@ model GeneratedAsset {
 }
 
 model UsageLog {
-  id              String   @id @default(cuid())
-  userId          String
-  jobId           String
-  provider        String
-  model           String
-  inputUnits      Int      @default(0)
-  outputUnits     Int      @default(0)
-  actualCostUsd   Decimal  @default(0) @db.Decimal(12, 6)
-  createdAt       DateTime @default(now())
+  id            String   @id @default(cuid())
+  userId        String
+  jobId         String
+  provider      String
+  model         String
+  inputUnits    Int      @default(0)
+  outputUnits   Int      @default(0)
+  actualCostUsd Decimal  @default(0) @db.Decimal(12, 6)
+  createdAt     DateTime @default(now())
 
   user User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   job  GenerationJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
 
   @@index([userId, createdAt])
   @@index([jobId])
+}
+
+// ---------------------------------------------------------------------------
+// Provider capacity accounting (separate from user credit accounting).
+// Neuron amounts are stored as integer centi-neurons (1/100 Neuron), because
+// Cloudflare reports usage with two decimals (e.g. "172.80"). 9,500 Neurons = 950000.
+// ---------------------------------------------------------------------------
+
+enum BudgetReservationStatus {
+  RESERVED // held for an in-flight job
+  CONSUMED // provider ran; settled with actual usage
+  RELEASED // provider never ran; capacity returned
+}
+
+/// One row per provider per UTC day (Cloudflare resets limits at 00:00 UTC).
+/// Reservations use a single conditional UPDATE so concurrent requests cannot exceed the limit.
+model ProviderDailyBudget {
+  id                   String   @id @default(cuid())
+  provider             String
+  /// UTC calendar day this budget covers.
+  day                  DateTime @db.Date
+  limitCentiNeurons    Int
+  /// Capacity held by RESERVED (in-flight) reservations.
+  reservedCentiNeurons Int      @default(0)
+  /// Actual provider usage of CONSUMED reservations.
+  consumedCentiNeurons Int      @default(0)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  reservations ProviderBudgetReservation[]
+
+  @@unique([provider, day])
+}
+
+/// Exactly one reservation per job. Settlement is a guarded transition
+/// (UPDATE ... WHERE status = 'RESERVED'), so it can happen only once.
+model ProviderBudgetReservation {
+  id                   String                  @id @default(cuid())
+  budgetId             String
+  jobId                String                  @unique
+  status               BudgetReservationStatus @default(RESERVED)
+  reservedCentiNeurons Int
+  /// Actual usage reported by the provider (cf-ai-neurons header), set on CONSUMED.
+  actualCentiNeurons   Int?
+  createdAt            DateTime                @default(now())
+  settledAt            DateTime?
+
+  budget ProviderDailyBudget @relation(fields: [budgetId], references: [id], onDelete: Restrict)
+  job    GenerationJob       @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@index([budgetId, status])
+  @@index([status, createdAt])
 }
