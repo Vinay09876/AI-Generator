@@ -40,3 +40,26 @@ export const PENDING_STALE_MS = 2 * 60_000;
  * (provider calls take seconds and are aborted at 60s), so reconciliation may settle it.
  */
 export const PROCESSING_STALE_MS = 5 * 60_000;
+
+// ---------------------------------------------------------------------------
+// Provider + storage limits (Stage 4)
+// ---------------------------------------------------------------------------
+
+/** Abort our wait for the provider after this long. Must stay well below PROCESSING_STALE_MS. */
+export const PROVIDER_TIMEOUT_MS = 60_000;
+/** Largest provider response body we will read (base64 image + JSON). ~819 KB JPEG ≈ 1.1 MB base64. */
+export const MAX_PROVIDER_RESPONSE_BYTES = 15 * 1024 * 1024;
+/** Largest decoded provider image we will process. */
+export const MAX_PROVIDER_IMAGE_BYTES = 10 * 1024 * 1024;
+/** Largest image dimension accepted from the provider (FLUX.1 Schnell returns 1024×1024). */
+export const MAX_IMAGE_DIMENSION = 2048;
+/** Smallest plausible dimension; anything smaller is treated as invalid output. */
+export const MIN_IMAGE_DIMENSION = 64;
+
+/** Stored format. JPEG originals are never stored. */
+export const STORED_IMAGE_MIME = "image/webp";
+export const WEBP_QUALITY = 85;
+/** Matches the bucket's file-size limit; enforced in application code too. */
+export const MAX_STORED_IMAGE_BYTES = 5 * 1024 * 1024;
+/** Lifetime of signed asset URLs (seconds). */
+export const SIGNED_URL_TTL_SECONDS = 600;
