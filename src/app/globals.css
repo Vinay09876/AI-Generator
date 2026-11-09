@@ -1,1 +1,123 @@
 @import "tailwindcss";
+
+@theme {
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-sora), var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+
+  --color-background: #06060a;
+  --color-surface: #0c0c13;
+  --color-surface-2: #12121b;
+  --color-foreground: #ededf3;
+  --color-muted: #9898ad;
+  --color-violet: #8b5cf6;
+  --color-fuchsia: #d946ef;
+  --color-cyan: #22d3ee;
+}
+
+@property --border-angle {
+  syntax: "<angle>";
+  initial-value: 0deg;
+  inherits: false;
+}
+
+@keyframes border-spin {
+  to {
+    --border-angle: 360deg;
+  }
+}
+
+@keyframes shimmer {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(100%);
+  }
+}
+
+@keyframes caret-blink {
+  50% {
+    opacity: 0;
+  }
+}
+
+:root {
+  color-scheme: dark;
+}
+
+html {
+  scroll-behavior: smooth;
+  scroll-padding-top: 5rem;
+}
+
+body {
+  background-color: var(--color-background);
+  color: var(--color-foreground);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+::selection {
+  background: rgb(139 92 246 / 0.35);
+}
+
+@utility text-gradient {
+  background-image: linear-gradient(100deg, #c4b5fd 0%, #f0abfc 45%, #67e8f9 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+@utility bg-grid {
+  background-image:
+    linear-gradient(to right, rgb(255 255 255 / 0.045) 1px, transparent 1px),
+    linear-gradient(to bottom, rgb(255 255 255 / 0.045) 1px, transparent 1px);
+  background-size: 56px 56px;
+}
+
+/* Animated conic gradient border. Pair with rounded-* and a surface background. */
+@utility border-glow {
+  border: 1px solid transparent;
+  background:
+    linear-gradient(var(--color-surface), var(--color-surface)) padding-box,
+    conic-gradient(
+        from var(--border-angle),
+        rgb(255 255 255 / 0.08) 0%,
+        rgb(255 255 255 / 0.08) 55%,
+        #8b5cf6 70%,
+        #d946ef 80%,
+        #22d3ee 90%,
+        rgb(255 255 255 / 0.08) 100%
+      )
+      border-box;
+  animation: border-spin 6s linear infinite;
+}
+
+@utility shimmer {
+  position: relative;
+  overflow: hidden;
+  &::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.08), transparent);
+    animation: shimmer 1.6s linear infinite;
+  }
+}
+
+@utility caret {
+  animation: caret-blink 1s steps(1) infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}

@@ -1,0 +1,19 @@
+import Link from "next/link";
+import { Sparkles } from "lucide-react";
+import { SITE } from "@/lib/constants";
+import { cn } from "@/lib/utils";
+
+export function Logo({ className }: { className?: string }) {
+  return (
+    <Link
+      href="/"
+      aria-label={`${SITE.name} home`}
+      className={cn("group inline-flex items-center gap-2.5", className)}
+    >
+      <span className="relative grid size-8 place-items-center rounded-lg bg-gradient-to-br from-violet via-fuchsia to-cyan shadow-[0_0_24px_-4px_rgb(168_85_247/0.8)] transition-transform duration-500 group-hover:rotate-[8deg]">
+        <Sparkles className="size-4 text-white" strokeWidth={2.25} />
+      </span>
+      <span className="font-display text-lg font-semibold tracking-tight">{SITE.name}</span>
+    </Link>
+  );
+}
