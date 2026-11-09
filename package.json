@@ -37,6 +37,8 @@
     "start": "next start",
     "lint": "next lint",
     "test:accounting": "tsx scripts/test-accounting.mts",
-    "test:adapters": "tsx --conditions=react-server scripts/test-generation-adapters.mts"
+    "test:adapters": "tsx --conditions=react-server scripts/test-generation-adapters.mts",
+    "test:api": "tsx --conditions=react-server scripts/test-generation-api.mts",
+    "test:integration": "tsx --conditions=react-server scripts/test-generation-integration.mts"
   }
 }

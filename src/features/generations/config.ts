@@ -47,6 +47,18 @@ export const PROCESSING_STALE_MS = 5 * 60_000;
 
 /** Abort our wait for the provider after this long. Must stay well below PROCESSING_STALE_MS. */
 export const PROVIDER_TIMEOUT_MS = 60_000;
+/**
+ * Upper bound for one synchronous generation request (seconds). Must match
+ * `export const maxDuration` in src/app/api/generations/image/route.ts (Next.js needs a literal there).
+ * Ordering invariant (checked by tests): PROVIDER_TIMEOUT_MS < this < PROCESSING_STALE_MS.
+ */
+export const GENERATION_REQUEST_MAX_DURATION_S = 90;
+/** errorMessage prefix of a PROCESSING job whose provider outcome is unknown (awaiting reconciliation). */
+export const AWAITING_RECONCILIATION_PREFIX = "Awaiting reconciliation: ";
+/** Max JSON body accepted by the generation endpoint (a 2,048-char prompt is far below this). */
+export const GENERATION_REQUEST_MAX_BODY_BYTES = 16 * 1024;
+/** Suggested client poll interval while a job is in progress (seconds). */
+export const GENERATION_POLL_INTERVAL_S = 3;
 /** Largest provider response body we will read (base64 image + JSON). ~819 KB JPEG ≈ 1.1 MB base64. */
 export const MAX_PROVIDER_RESPONSE_BYTES = 15 * 1024 * 1024;
 /** Largest decoded provider image we will process. */

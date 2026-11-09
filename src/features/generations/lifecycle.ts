@@ -1,4 +1,4 @@
-import { GenerationStatus, GenerationType, Prisma } from "@/generated/prisma/client";
+import { AssetType, GenerationStatus, GenerationType, Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
 import { utcDayRange } from "@/lib/utc";
 import { debitWallet, jobDebitKey, refundJobDebit } from "@/features/credits/ledger";
@@ -9,6 +9,7 @@ import {
   reserveNeuronsForJob,
 } from "@/features/budget/neuron-budget";
 import {
+  AWAITING_RECONCILIATION_PREFIX,
   DAILY_NEURON_LIMIT_CENTI,
   DAILY_USER_IMAGE_LIMIT,
   IMAGE_MODEL,
@@ -16,12 +17,12 @@ import {
   IMAGE_QUALITIES,
   PENDING_STALE_MS,
   PROCESSING_STALE_MS,
-  PROMPT_MAX_LENGTH,
-  PROMPT_MIN_LENGTH,
-  isImageQuality,
   type ImageQuality,
 } from "./config";
 import { AccountingError } from "./errors";
+import { validateImageRequest } from "./validation";
+
+export { validateImageRequest };
 
 /*
  * Image job lifecycle and its accounting.
@@ -30,6 +31,7 @@ import { AccountingError } from "./errors";
  *   markJobStarted ──► PROCESSING     (committed BEFORE the provider is called)
  *   recordProviderSuccess             (reservation CONSUMED with actual usage)
  *   completeJob    ──► COMPLETED      (only after provider success; nothing refunded)
+ *   completeImageJobWithAsset         (same guarded transition + GeneratedAsset row, one transaction)
  *
  * Failure paths (each settles exactly once via a guarded job-status transition):
  *   failJobProviderNotRun        provider definitely did not run → release + refund
@@ -69,8 +71,6 @@ export function countDailyImageJobs(db: Pick<Prisma.TransactionClient, "generati
     },
   });
 }
-const IDEMPOTENCY_KEY_PATTERN = /^[A-Za-z0-9_-]{8,100}$/;
-
 export type ImageJobSettings = {
   quality: ImageQuality;
   steps: number;
@@ -95,19 +95,6 @@ export type ImageJob = Prisma.GenerationJobGetPayload<{ select: typeof jobSelect
 
 /** Test-only overrides; production callers never pass these. */
 export type AccountingOverrides = { now?: Date; provider?: string; dailyNeuronLimit?: number };
-
-/** Validation happens before any transaction, so invalid input never debits or reserves. */
-export function validateImageRequest(input: { prompt: unknown; quality: unknown; idempotencyKey: unknown }) {
-  const prompt = typeof input.prompt === "string" ? input.prompt.trim() : "";
-  if (prompt.length < PROMPT_MIN_LENGTH || prompt.length > PROMPT_MAX_LENGTH) {
-    throw new AccountingError("INVALID_INPUT", `Prompt must be ${PROMPT_MIN_LENGTH}-${PROMPT_MAX_LENGTH} characters.`);
-  }
-  if (!isImageQuality(input.quality)) throw new AccountingError("INVALID_INPUT", "Unknown quality option.");
-  if (typeof input.idempotencyKey !== "string" || !IDEMPOTENCY_KEY_PATTERN.test(input.idempotencyKey)) {
-    throw new AccountingError("INVALID_INPUT", "Invalid request key.");
-  }
-  return { prompt, quality: input.quality, idempotencyKey: input.idempotencyKey };
-}
 
 /**
  * Create an image job with all initial accounting in ONE short transaction:
@@ -224,17 +211,82 @@ export async function recordProviderSuccess(jobId: string, actualCentiNeurons: n
   }, TX_OPTIONS);
 }
 
+/**
+ * The single guarded completion transition, shared by completeJob and
+ * completeImageJobWithAsset: PROCESSING → COMPLETED only if provider usage was settled
+ * (reservation CONSUMED). Matches zero rows if the job was already settled (e.g. reconciled).
+ */
+async function transitionToCompleted(tx: Prisma.TransactionClient, jobId: string) {
+  const rows = await tx.$queryRaw<{ id: string; userId: string }[]>`
+    UPDATE "GenerationJob" j
+    SET "status" = 'COMPLETED', "chargedCredits" = j."estimatedCredits", "completedAt" = now(), "updatedAt" = now()
+    WHERE j."id" = ${jobId} AND j."status" = 'PROCESSING'
+      AND EXISTS (SELECT 1 FROM "ProviderBudgetReservation" r WHERE r."jobId" = j."id" AND r."status" = 'CONSUMED')
+    RETURNING j."id", j."userId"`;
+  return rows[0] ?? null;
+}
+
 /** PROCESSING → COMPLETED, only after provider success was recorded. Exactly once. */
 export async function completeJob(jobId: string) {
+  return prisma.$transaction(async (tx) => (await transitionToCompleted(tx, jobId)) !== null, TX_OPTIONS);
+}
+
+/** Thrown when a job can no longer be completed (already settled, or usage not recorded). */
+export class JobNotCompletableError extends Error {
+  constructor(public readonly jobId: string) {
+    super("Job is no longer completable.");
+    this.name = "JobNotCompletableError";
+  }
+}
+
+export type CompletedAssetInput = {
+  userId: string;
+  assetId: string;
+  storageKey: string;
+  mimeType: string;
+  width: number;
+  height: number;
+  sizeBytes: number;
+};
+
+/**
+ * Complete an image job and record its stored asset in ONE short transaction:
+ * the guarded completion (as completeJob) and the GeneratedAsset insert commit together,
+ * so a job is COMPLETED only if its usage is settled AND its asset row exists.
+ * Throws JobNotCompletableError if the job was settled meanwhile (nothing is written);
+ * the caller must then delete the uploaded object.
+ */
+export async function completeImageJobWithAsset(jobId: string, asset: CompletedAssetInput) {
   return prisma.$transaction(async (tx) => {
-    const rows = await tx.$queryRaw<{ id: string }[]>`
-      UPDATE "GenerationJob" j
-      SET "status" = 'COMPLETED', "chargedCredits" = j."estimatedCredits", "completedAt" = now(), "updatedAt" = now()
-      WHERE j."id" = ${jobId} AND j."status" = 'PROCESSING'
-        AND EXISTS (SELECT 1 FROM "ProviderBudgetReservation" r WHERE r."jobId" = j."id" AND r."status" = 'CONSUMED')
-      RETURNING j."id"`;
-    return rows.length === 1;
+    const done = await transitionToCompleted(tx, jobId);
+    if (!done) throw new JobNotCompletableError(jobId);
+    // Defence in depth: the asset owner must be the job owner (rolls back the completion).
+    if (done.userId !== asset.userId) throw new JobNotCompletableError(jobId);
+    await tx.generatedAsset.create({
+      data: {
+        id: asset.assetId,
+        userId: asset.userId,
+        jobId,
+        type: AssetType.IMAGE,
+        storageKey: asset.storageKey,
+        mimeType: asset.mimeType,
+        width: asset.width,
+        height: asset.height,
+        fileSize: BigInt(asset.sizeBytes),
+      },
+      select: { id: true },
+    });
+    return { jobId, assetId: asset.assetId };
   }, TX_OPTIONS);
+}
+
+/**
+ * Whether an asset row exists for this job. Used only to resolve an ambiguous commit
+ * (the completion transaction may have committed even though the client saw an error).
+ */
+export async function imageAssetExists(jobId: string, assetId: string) {
+  const row = await prisma.generatedAsset.findFirst({ where: { id: assetId, jobId }, select: { id: true } });
+  return row !== null;
 }
 
 type ReservationMode = "release" | "consume-if-reserved";
@@ -287,7 +339,7 @@ export function failJobAfterProviderSuccess(jobId: string, reason: string) {
 export async function markProviderOutcomeUnknown(jobId: string, reason: string) {
   const { count } = await prisma.generationJob.updateMany({
     where: { id: jobId, status: GenerationStatus.PROCESSING },
-    data: { errorMessage: `Awaiting reconciliation: ${reason}` },
+    data: { errorMessage: `${AWAITING_RECONCILIATION_PREFIX}${reason}` },
   });
   return count === 1;
 }

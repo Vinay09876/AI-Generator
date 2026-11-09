@@ -92,6 +92,32 @@ export const getRecentJobs = cache(async (userId: string, take = 6) => {
   });
 });
 
+/**
+ * One image job with its asset metadata, scoped to the owner. Returns null for both
+ * "missing" and "not yours". Never selects the storage key.
+ */
+export async function getImageJobForUser(userId: string, jobId: string) {
+  return prisma.generationJob.findFirst({
+    where: { id: jobId, userId, type: GenerationType.IMAGE },
+    select: {
+      id: true,
+      status: true,
+      prompt: true,
+      settings: true,
+      chargedCredits: true,
+      errorMessage: true,
+      createdAt: true,
+      completedAt: true,
+      assets: {
+        where: { userId },
+        orderBy: { createdAt: "asc" },
+        take: 1,
+        select: { id: true, width: true, height: true, mimeType: true, fileSize: true },
+      },
+    },
+  });
+}
+
 export const HISTORY_PAGE_SIZE = 20;
 
 /** Keyset pagination over the user's jobs, newest first, optionally filtered by type. */

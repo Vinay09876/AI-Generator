@@ -17,6 +17,17 @@ const MESSAGES: Record<AccountingErrorCode, string> = {
   IDEMPOTENCY_CONFLICT: "This request key was already used for a different request.",
 };
 
+/**
+ * The generation service is not usable (e.g. provider or storage not configured).
+ * Raised BEFORE any job is created, so nothing is debited or reserved.
+ */
+export class GenerationUnavailableError extends Error {
+  constructor(message = "Image generation is temporarily unavailable.") {
+    super(message);
+    this.name = "GenerationUnavailableError";
+  }
+}
+
 /** Expected, user-facing accounting outcomes. Safe to show `message` to the user. */
 export class AccountingError extends Error {
   constructor(

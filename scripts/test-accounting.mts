@@ -2,34 +2,23 @@
 // daily limits, idempotency and concurrency. Makes NO provider (Cloudflare) calls.
 //
 // SAFETY: runs ONLY against a dedicated test database given by TEST_DATABASE_URL.
-// It never falls back to DATABASE_URL and refuses to run if both point to the same
-// database. The test database must have all Prisma migrations applied:
+// It never falls back to DATABASE_URL and refuses to run unless both URLs resolve to
+// DIFFERENT Supabase project references (fails closed if either cannot be identified;
+// see scripts/lib/test-db-guard.mts). The test database must have all migrations applied:
 //   DATABASE_URL="$TEST_DATABASE_URL" npx prisma migrate deploy
 //
 // Run:  npm run test:accounting
 // Writes temporary users/jobs/budget rows (tagged with a timestamp) and removes them at the end.
 import { config } from "dotenv";
+import { requireSeparateTestDatabase } from "./lib/test-db-guard.mjs";
 
 config({ quiet: true });
 
-const testUrl = process.env.TEST_DATABASE_URL?.trim();
-if (!testUrl) {
-  console.error("Refusing to run: TEST_DATABASE_URL is not set. This suite never uses DATABASE_URL.");
-  process.exit(1);
-}
-if (testUrl === process.env.DATABASE_URL?.trim()) {
-  console.error("Refusing to run: TEST_DATABASE_URL is identical to DATABASE_URL. Use a dedicated test database.");
-  process.exit(1);
-}
+const { testUrl, maskedRef } = requireSeparateTestDatabase();
 // Point the app's Prisma client at the test database BEFORE any app module is loaded.
 // App modules are imported dynamically below, so this assignment runs first.
 process.env.DATABASE_URL = testUrl;
-try {
-  const u = new URL(testUrl);
-  console.log(`Using test database: ${u.hostname}${u.pathname} (credentials hidden)\n`);
-} catch {
-  console.log("Using test database from TEST_DATABASE_URL\n");
-}
+console.log(`Using test database project ${maskedRef} (credentials hidden)\n`);
 
 const { prisma } = await import("@/lib/prisma");
 const { hashPassword } = await import("@/features/auth/password");
