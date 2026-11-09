@@ -1,13 +1,18 @@
 import type { Metadata } from "next";
-import { ComingSoon } from "@/components/layout/coming-soon";
+import { AuthCard } from "@/features/auth/components/auth-card";
+import { RegisterForm } from "@/features/auth/components/register-form";
+import { INITIAL_CREDITS, ROUTES } from "@/lib/constants";
 
 export const metadata: Metadata = { title: "Create your account" };
 
-export default function Page() {
+export default function RegisterPage() {
   return (
-    <ComingSoon
+    <AuthCard
       title="Create your account"
-      description="Sign-ups are opening soon. Accounts will give you access to every YourAI tool as it launches."
-    />
+      description={`Every new account starts with ${INITIAL_CREDITS} credits to explore YourAI.`}
+      footer={{ text: "Already have an account?", linkLabel: "Log in", href: ROUTES.login }}
+    >
+      <RegisterForm />
+    </AuthCard>
   );
 }

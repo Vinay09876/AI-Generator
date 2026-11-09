@@ -1,13 +1,28 @@
 import type { Metadata } from "next";
-import { ComingSoon } from "@/components/layout/coming-soon";
+import { AuthCard } from "@/features/auth/components/auth-card";
+import { LoginForm } from "@/features/auth/components/login-form";
+import { safeRedirectPath } from "@/features/auth/redirect";
+import { ROUTES } from "@/lib/constants";
 
 export const metadata: Metadata = { title: "Log in" };
 
-export default function Page() {
+export default async function LoginPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ callbackUrl?: string; registered?: string }>;
+}) {
+  const { callbackUrl, registered } = await searchParams;
+
   return (
-    <ComingSoon
-      title="Log in"
-      description="Account sign-in is on the way. Check back soon to access your YourAI workspace."
-    />
+    <AuthCard
+      title="Welcome back"
+      description="Log in to your YourAI workspace."
+      footer={{ text: "New to YourAI?", linkLabel: "Create an account", href: ROUTES.register }}
+    >
+      <LoginForm
+        callbackUrl={callbackUrl ? safeRedirectPath(callbackUrl) : undefined}
+        notice={registered ? "Your account was created. Please log in." : undefined}
+      />
+    </AuthCard>
   );
 }
