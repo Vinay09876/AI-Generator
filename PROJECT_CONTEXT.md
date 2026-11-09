@@ -26,8 +26,8 @@ AI Image Generator — 7-stage roadmap:
 | 2 | Prisma schema + safe migrations | ✅ Done — commit `43c68cf` |
 | 3 | Credit ledger, Neuron budget, job lifecycle (65 tests) | ✅ Done — commit `6a2bd3b` |
 | 4 | Cloudflare provider adapter + Supabase Storage adapter (119 mocked tests) | ✅ Done — commit `218239a` |
-| 5 | Generation APIs, job processing, recovery | ✅ Implementation complete — offline API tests 161/161, adapter tests 119/119, DB integration tests 28/28, accounting tests 65/65 (dedicated test DB; all test records cleaned up), TypeScript check passed, `next build` passed. Not yet committed. |
-| 6 | `/ai-image` UI | ⏳ Pending |
+| 5 | Generation APIs, job processing, recovery | ✅ Implementation complete — offline API tests 161/161, adapter tests 119/119, DB integration tests 28/28, accounting tests 65/65 (dedicated test DB; all test records cleaned up), TypeScript check passed, `next build` passed. Commit `68d7bc7` (pushed). |
+| 6 | `/ai-image` UI | ✅ Implemented (B1–B6) and **real-generation-tested** (one Fast E2E generation on production, 2026-11-09 — see below). Reload-during-processing recovery **unverified** with a real job. |
 | 7 | Final testing + release readiness | ⏳ Pending |
 
 ## 3. Tech stack
@@ -100,6 +100,9 @@ Next.js 16 uses `src/proxy.ts` (formerly middleware). Repo: `github.com/Vinay098
 | Pure request validation | `src/features/generations/validation.ts` |
 | Trusted origin, capped JSON body, error envelope | `src/lib/api.ts` |
 | API routes | `src/app/api/generations/image/route.ts` (POST), `src/app/api/generations/[jobId]/route.ts` (GET), `src/app/api/assets/[assetId]/route.ts` (GET → 302) |
+| Image generator UI (client) | `src/components/image-generator/` (composer, preview, result actions, gallery, recovery notice, `use-generation.ts`) · `src/app/(dashboard)/ai-image/page.tsx` (server data) |
+| Client generation logic (framework-free, DI) | `src/features/generations/client/` — `api.ts` (typed fetch, never throws), `pending-request.ts` (localStorage, key created only on submit), `polling.ts` (pure decisions), `generation-controller.ts` (state machine + recovery), `recovery-scheduler.ts` (Strict-Mode-safe), `gallery.ts`, `download.ts` |
+| Stage 6 tests | `npm run test:ui-logic` · `test:ui-flow` · `test:ui-recovery` · `test:ui-gallery` (all offline) · `test:queries` (TEST_DATABASE_URL only) |
 | Stage 5 tests | `scripts/test-generation-api.mts` (`npm run test:api`, offline) · `scripts/test-generation-integration.mts` (`npm run test:integration`, TEST_DATABASE_URL only) |
 
 Provider error outcomes drive Stage 5 settlement: `not_run` → `failJobProviderNotRun`; `ran` → `recordProviderSuccess(usage ?? null)` + `failJobAfterProviderSuccess`; `unknown` → `markProviderOutcomeUnknown` (reconcile later). Missing/invalid usage is `null` → charge the reserved amount, never zero.
@@ -152,6 +155,27 @@ Lifecycle: `createImageJob` (PENDING) → `markJobStarted` (PROCESSING, commit *
 - **Reconciliation triggers are best effort.** Stale jobs are settled when their owner calls POST/GET, plus a bounded global sweep in Next.js `after()`. `after()` is NOT a durable queue (lost if the process stops); a stuck job of a user who never returns keeps its Neuron reservation until another request triggers the sweep. A durable scheduler (cron) is a future item.
 - UsageLog is not written; ProviderBudgetReservation is the source of truth for Neuron usage.
 
+**Image generator UI (Stage 6)**
+- Client state machine: idle → submitting → polling → completed / failed, plus error (rejected before a job existed) and stalled. The idempotency key is created only by an explicit submit and reused for every retry / replay / recovery; replays never start a second generation.
+- A pending request (key, prompt, quality, startedAt, jobId?) is stored per user in localStorage *before* the POST; it is cleared only for its own job's confirmed terminal state, a definitive rejection, or expiry.
+- Page-load recovery (once, Strict-Mode safe): server active job → poll; stored job id → poll; stored request without job id < 10 min → replay with the original key; older → removed with an "expired" notice (prompt restorable). A stored request that is not the server's active job is **held** (kept, explained; Resume / Discard are explicit user actions; new submits are blocked meanwhile).
+- Polling: Retry-After (1–30 s), backoff 3/6/12/30 s on failures, paused while the tab is hidden, stops after 7 min → "stalled" with Check again (GET only when a job id is known). "Check now" for uncertain outcomes.
+- `completed` requires a confirmed asset. Images are shown only via `/api/assets/{id}`; signed storage URLs and keys never enter client state. Download = blob fetch of `/api/assets/{id}` saved as `yourai-<jobId>.webp`, falling back to opening the image.
+- Recent images gallery: the 8 newest completed images (`getRecentImageJobs`, owner-scoped). Selecting one is pure view state (never touches the controller or the stored request).
+- Layout: centred single column (max 672 px) below 1280 px; composer + preview side by side from `xl` (1280 px). Gallery 2 / 3 / 4 columns.
+- Accessibility: native radio group for quality, labelled prompt with threshold announcements, one polite live region for generation states, `role=alert` for rejections, loading buttons use `aria-disabled` (focus is kept), prompt is read-only (not disabled) while busy, ≥ 44 px targets, reduced-motion respected.
+
+**Stage 6 real E2E test (2026-11-09, one approved Fast generation)**
+- Setup: local `next dev` on port 3001 against production DB / Cloudflare / Supabase (`APP_ORIGIN=http://localhost:3001` passed to that process only; `.env` unchanged). User-driven browser test with the dedicated QA account; no automation, no session minting.
+- Exactly one `POST /api/generations/image` → 201 (11.5 s end-to-end on the dev server, including Tokyo DB round trips). No polling or replay was needed; no second POST.
+- Job `cmw9a961x0000m0j7u24x8qwr`: COMPLETED, FLUX.1 Schnell, Fast (4 steps). Provider latency 1.74 s; job created→started 2.56 s, started→completed 4.48 s.
+- Neurons: actual usage from the `cf-ai-neurons` header = 172.80 (17,280 centi), identical to the reservation; reservation CONSUMED and settled once; daily budget consumed 17,280, reserved 0.
+- Storage: exactly one object at `users/{userId}/images/{jobId}/{assetId}.webp` in the private bucket — valid WebP, 1024 × 1024, 31,318 bytes (row size matches), `cache-control: max-age=3600`. Asset `6b9df473-6561-4eff-94a6-0247250d815e`.
+- Credits: one GENERATION_DEBIT −1 (`job-debit:<job>`), wallet 100 → 99, ledger sum = wallet, no refund. No duplicate job / asset / debit / reservation.
+- Image delivery: `/api/assets/{id}` → 302 to a signed URL. Verified in the browser by the user: the image rendered in the preview and appeared in Recent images; Download saved the file with the expected name `yourai-<jobId>.webp` (blob path; the server log shows exactly one further `/api/assets` request and no new-tab fallback); DevTools console had no errors.
+- No server errors. Note: Next.js dev warns about `scroll-behavior: smooth` on `<html>` (suggests `data-scroll-behavior="smooth"`); cosmetic, pre-existing.
+- **Unverified:** reload during a real in-flight generation (the job completed inside the synchronous request, so no reload window existed).
+
 **Storage:** private Supabase bucket `generated-assets` (verified: private, 5,242,880-byte limit, `image/webp` only), keys `users/{userId}/images/{jobId}/{assetId}.webp`, 10-minute signed URLs issued only after an ownership lookup.
 
 ## 8. Known risks / open items
@@ -165,6 +189,10 @@ Lifecycle: `createImageJob` (PENDING) → `markJobStarted` (PROCESSING, commit *
 - Stage 5: Supabase upload has no client-side timeout; a hung upload is safe (guarded completion) but holds the request until the platform's `maxDuration`.
 - Stage 5: if the asset DB write fails AND the cleanup delete fails, the object is orphaned (logged with its key for manual removal).
 - Stage 5: `APP_ORIGIN` must be set in production (and for tunnels/non-localhost dev), otherwise every POST is rejected with 403.
+- Stage 6: verified with one real Fast generation (see "Stage 6 real E2E test"). Still unverified with a real job: a browser reload during an in-flight generation (recovery is covered by offline tests and fixture browser tests only). The real download path (cross-origin blob from the signed URL) works.
+- Stage 6: image egress. Every `/api/assets/{id}` hit signs a new URL, so browsers cannot cache images across visits. Each `/ai-image` visit loads up to 8 full-size WebP images (6 on a phone before scrolling). Fixture estimate ~165 KB each (≈ 1.3 MB/visit, ≈ 3,800 visits/month on the 5 GB Supabase Free egress); the first real image was 31 KB, so real sizes vary with image content. Within a page, the preview reuses the thumbnail's already-loaded image (0 extra requests). Small thumbnail renditions or cacheable URLs would need a backend change (future).
+- Stage 6: one pending-request slot per user and browser; a held request blocks new submits until resumed or discarded. A stored request without a job id is matched to the server's active job by prompt + quality.
+- Stage 6: the 7-minute polling limit restarts on each page load (server reconciliation still settles stuck jobs at 5 minutes).
 - Test database: dedicated Supabase project (`TEST_DATABASE_URL`, verified separate from production by project ref). Migrations on it require explicit approval.
 
 ## 9. Deployment requirements

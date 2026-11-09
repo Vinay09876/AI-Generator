@@ -5,6 +5,8 @@ node_modules/
 .next/
 out/
 build/
+# Written (and re-added) by `next dev`: only Next.js's managed agent-rules block, no project content.
+AGENTS.md
 
 # Environment variables and secrets
 .env

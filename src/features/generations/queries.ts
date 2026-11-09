@@ -93,28 +93,64 @@ export const getRecentJobs = cache(async (userId: string, take = 6) => {
 });
 
 /**
+ * Fields needed to render an image job (job-view.ts `ImageJobRecord`). The asset relation is
+ * restricted to the owner and NEVER selects the storage key.
+ */
+function imageJobRecordSelect(userId: string) {
+  return {
+    id: true,
+    status: true,
+    prompt: true,
+    settings: true,
+    chargedCredits: true,
+    errorMessage: true,
+    createdAt: true,
+    completedAt: true,
+    assets: {
+      where: { userId },
+      orderBy: { createdAt: "asc" },
+      take: 1,
+      select: { id: true, width: true, height: true, mimeType: true, fileSize: true },
+    },
+  } as const;
+}
+
+/**
  * One image job with its asset metadata, scoped to the owner. Returns null for both
  * "missing" and "not yours". Never selects the storage key.
  */
 export async function getImageJobForUser(userId: string, jobId: string) {
   return prisma.generationJob.findFirst({
     where: { id: jobId, userId, type: GenerationType.IMAGE },
-    select: {
-      id: true,
-      status: true,
-      prompt: true,
-      settings: true,
-      chargedCredits: true,
-      errorMessage: true,
-      createdAt: true,
-      completedAt: true,
-      assets: {
-        where: { userId },
-        orderBy: { createdAt: "asc" },
-        take: 1,
-        select: { id: true, width: true, height: true, mimeType: true, fileSize: true },
-      },
-    },
+    select: imageJobRecordSelect(userId),
+  });
+}
+
+/**
+ * The user's in-progress image job (PENDING or PROCESSING), if any. At most one can exist
+ * (partial unique index), so the page can resume it after a refresh. Owner-scoped.
+ */
+export async function getActiveImageJob(userId: string) {
+  return prisma.generationJob.findFirst({
+    where: { userId, type: GenerationType.IMAGE, status: { in: [GenerationStatus.PENDING, GenerationStatus.PROCESSING] } },
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+    select: imageJobRecordSelect(userId),
+  });
+}
+
+export const RECENT_IMAGES_MAX = 24;
+
+/**
+ * The user's most recent COMPLETED image jobs that have a stored asset, newest first.
+ * Owner-scoped on both the job and the asset; never returns storage keys.
+ */
+export async function getRecentImageJobs(userId: string, take = 8) {
+  const limit = Math.min(Math.max(Math.trunc(take) || 0, 1), RECENT_IMAGES_MAX);
+  return prisma.generationJob.findMany({
+    where: { userId, type: GenerationType.IMAGE, status: GenerationStatus.COMPLETED, assets: { some: { userId } } },
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+    take: limit,
+    select: imageJobRecordSelect(userId),
   });
 }
 

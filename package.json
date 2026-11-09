@@ -39,6 +39,11 @@
     "test:accounting": "tsx scripts/test-accounting.mts",
     "test:adapters": "tsx --conditions=react-server scripts/test-generation-adapters.mts",
     "test:api": "tsx --conditions=react-server scripts/test-generation-api.mts",
-    "test:integration": "tsx --conditions=react-server scripts/test-generation-integration.mts"
+    "test:integration": "tsx --conditions=react-server scripts/test-generation-integration.mts",
+    "test:ui-logic": "tsx scripts/test-image-ui-logic.mts",
+    "test:queries": "tsx --conditions=react-server scripts/test-image-queries-integration.mts",
+    "test:ui-flow": "tsx scripts/test-image-generation-flow.mts",
+    "test:ui-recovery": "tsx scripts/test-image-recovery.mts",
+    "test:ui-gallery": "tsx scripts/test-image-gallery.mts"
   }
 }

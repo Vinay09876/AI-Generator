@@ -96,7 +96,7 @@ export function MobileNav({ user, balance }: { user: UserSummaryData; balance: n
             aria-haspopup="dialog"
             aria-expanded={open}
             aria-controls="mobile-nav-drawer"
-            className="grid size-10 place-items-center rounded-xl text-foreground transition-colors hover:bg-white/[0.06] focus-visible:outline-2 focus-visible:outline-violet"
+            className="grid size-11 place-items-center rounded-xl text-foreground transition-colors hover:bg-white/[0.06] focus-visible:outline-2 focus-visible:outline-violet"
           >
             <Menu className="size-5" />
           </button>
@@ -134,7 +134,7 @@ export function MobileNav({ user, balance }: { user: UserSummaryData; balance: n
                   onClick={close}
                   data-autofocus
                   aria-label="Close navigation menu"
-                  className="grid size-10 place-items-center rounded-xl text-muted transition-colors hover:bg-white/[0.06] hover:text-foreground focus-visible:outline-2 focus-visible:outline-violet"
+                  className="grid size-11 place-items-center rounded-xl text-muted transition-colors hover:bg-white/[0.06] hover:text-foreground focus-visible:outline-2 focus-visible:outline-violet"
                 >
                   <X className="size-5" />
                 </button>

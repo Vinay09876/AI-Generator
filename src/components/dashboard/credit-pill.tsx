@@ -11,6 +11,8 @@ export function CreditPill({ balance, className }: { balance: number; className?
       aria-label={`${formatNumber(balance)} credits available`}
       className={cn(
         "inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-sm transition-colors hover:border-white/20",
+        // Same look; a transparent pseudo-element extends the touch target to 44px.
+        "relative before:absolute before:inset-x-0 before:-inset-y-[5px] before:content-['']",
         className,
       )}
     >

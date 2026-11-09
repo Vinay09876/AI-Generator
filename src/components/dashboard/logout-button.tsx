@@ -10,7 +10,7 @@ export function LogoutButton({ className, showLabel = true }: { className?: stri
         type="submit"
         aria-label={showLabel ? undefined : "Log out"}
         className={cn(
-          "inline-flex h-9 items-center gap-2 rounded-xl px-3 text-sm text-muted transition-colors",
+          "inline-flex h-11 min-w-11 items-center justify-center gap-2 rounded-xl px-3 text-sm text-muted transition-colors",
           "hover:bg-white/[0.06] hover:text-foreground focus-visible:outline-2 focus-visible:outline-violet",
           className,
         )}

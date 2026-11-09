@@ -30,7 +30,7 @@ export function SidebarNav({ layoutGroup, onNavigate }: { layoutGroup: string; o
                     onClick={onNavigate}
                     aria-current={active ? "page" : undefined}
                     className={cn(
-                      "group relative flex h-10 items-center gap-3 rounded-xl px-3 text-sm transition-colors",
+                      "group relative flex h-11 items-center gap-3 rounded-xl px-3 text-sm transition-colors",
                       "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet",
                       active ? "text-foreground" : "text-muted hover:bg-white/[0.04] hover:text-foreground",
                     )}
