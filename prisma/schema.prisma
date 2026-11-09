@@ -1,0 +1,182 @@
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum CreditTransactionType {
+  INITIAL_GRANT
+  PURCHASE
+  GENERATION_DEBIT
+  REFUND
+  ADMIN_ADJUSTMENT
+}
+
+enum GenerationType {
+  IMAGE
+  VIDEO
+  VIDEO_CLIP
+}
+
+enum GenerationStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum AssetType {
+  IMAGE
+  VIDEO
+  AUDIO
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  emailVerified DateTime?
+  image         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  accounts      Account[]
+  sessions      Session[]
+  wallet        CreditWallet?
+  transactions  CreditTransaction[]
+  jobs          GenerationJob[]
+  assets        GeneratedAsset[]
+  usageLogs     UsageLog[]
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model CreditWallet {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  balance   Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user         User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions CreditTransaction[]
+}
+
+model CreditTransaction {
+  id             String                @id @default(cuid())
+  userId         String
+  walletId       String
+  type           CreditTransactionType
+  amount         Int
+  balanceAfter   Int
+  description    String?
+  idempotencyKey String                @unique
+  createdAt      DateTime              @default(now())
+
+  user   User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  wallet CreditWallet @relation(fields: [walletId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([walletId, createdAt])
+}
+
+model GenerationJob {
+  id                String           @id @default(cuid())
+  userId            String
+  type              GenerationType
+  status            GenerationStatus @default(PENDING)
+  prompt            String?          @db.Text
+  provider          String?
+  providerJobId     String?
+  estimatedCredits  Int              @default(0)
+  chargedCredits    Int              @default(0)
+  errorMessage      String?          @db.Text
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  completedAt       DateTime?
+
+  user   User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  assets GeneratedAsset[]
+  usage  UsageLog[]
+
+  @@index([userId, createdAt])
+  @@index([status, createdAt])
+  @@unique([provider, providerJobId])
+}
+
+model GeneratedAsset {
+  id        String    @id @default(cuid())
+  userId    String
+  jobId     String
+  type      AssetType
+  fileUrl   String    @db.Text
+  mimeType  String?
+  fileSize  BigInt?
+  createdAt DateTime  @default(now())
+
+  user User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  job  GenerationJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([jobId])
+}
+
+model UsageLog {
+  id              String   @id @default(cuid())
+  userId          String
+  jobId           String
+  provider        String
+  model           String
+  inputUnits      Int      @default(0)
+  outputUnits     Int      @default(0)
+  actualCostUsd   Decimal  @default(0) @db.Decimal(12, 6)
+  createdAt       DateTime @default(now())
+
+  user User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  job  GenerationJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([jobId])
+}
