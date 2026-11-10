@@ -28,14 +28,22 @@ const COLUMNS = [
       { label: "Dashboard", href: ROUTES.dashboard },
     ],
   },
+  {
+    title: "Legal",
+    links: [
+      { label: "Terms of Service", href: ROUTES.terms },
+      { label: "Privacy Policy", href: ROUTES.privacy },
+      { label: "Acceptable Use", href: ROUTES.acceptableUse },
+    ],
+  },
 ] as const;
 
 export function Footer() {
   return (
     <footer className="relative border-t border-white/[0.06]">
       <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-violet/50 to-transparent" />
-      <div className="mx-auto grid max-w-6xl gap-12 px-4 py-16 sm:px-6 md:grid-cols-[1.4fr_repeat(3,1fr)]">
-        <div className="max-w-xs">
+      <div className="mx-auto grid max-w-6xl gap-10 px-4 py-16 sm:px-6 md:grid-cols-[1.3fr_repeat(4,1fr)]">
+        <div className="max-w-xs md:pr-4">
           <Logo />
           <p className="mt-4 text-sm leading-relaxed text-muted">{SITE.description}</p>
         </div>
@@ -62,7 +70,17 @@ export function Footer() {
           <p>
             © {new Date().getFullYear()} {SITE.name}. All rights reserved.
           </p>
-          <p>Crafted for creators, marketers and storytellers.</p>
+          <div className="flex flex-wrap items-center gap-4">
+            <Link href={ROUTES.terms} className="transition-colors hover:text-foreground">
+              Terms
+            </Link>
+            <Link href={ROUTES.privacy} className="transition-colors hover:text-foreground">
+              Privacy
+            </Link>
+            <Link href={ROUTES.acceptableUse} className="transition-colors hover:text-foreground">
+              Acceptable Use
+            </Link>
+          </div>
         </div>
       </div>
     </footer>

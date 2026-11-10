@@ -1,7 +1,9 @@
 "use client";
 
 import { useActionState } from "react";
+import Link from "next/link";
 import { registerAction, type AuthFormState } from "@/features/auth/actions";
+import { ROUTES } from "@/lib/constants";
 import { FormAlert, FormField, SubmitButton } from "./form-controls";
 
 const initialState: AuthFormState = {};
@@ -43,6 +45,30 @@ export function RegisterForm() {
         hint="Use at least 8 characters."
         errors={state.fieldErrors?.password}
       />
+      <p className="text-xs leading-relaxed text-muted">
+        By creating an account, you agree to our{" "}
+        <Link
+          href={ROUTES.terms}
+          className="text-foreground/90 underline decoration-white/20 underline-offset-4 hover:text-foreground"
+        >
+          Terms of Service
+        </Link>
+        ,{" "}
+        <Link
+          href={ROUTES.privacy}
+          className="text-foreground/90 underline decoration-white/20 underline-offset-4 hover:text-foreground"
+        >
+          Privacy Policy
+        </Link>
+        , and{" "}
+        <Link
+          href={ROUTES.acceptableUse}
+          className="text-foreground/90 underline decoration-white/20 underline-offset-4 hover:text-foreground"
+        >
+          Acceptable Use Policy
+        </Link>
+        .
+      </p>
       <SubmitButton pendingLabel="Creating account…">Create account</SubmitButton>
     </form>
   );

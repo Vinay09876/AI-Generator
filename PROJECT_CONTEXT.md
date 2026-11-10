@@ -27,8 +27,8 @@ AI Image Generator — 7-stage roadmap:
 | 3 | Credit ledger, Neuron budget, job lifecycle (65 tests) | ✅ Done — commit `6a2bd3b` |
 | 4 | Cloudflare provider adapter + Supabase Storage adapter (119 mocked tests) | ✅ Done — commit `218239a` |
 | 5 | Generation APIs, job processing, recovery | ✅ Implementation complete — offline API tests 161/161, adapter tests 119/119, DB integration tests 28/28, accounting tests 65/65 (dedicated test DB; all test records cleaned up), TypeScript check passed, `next build` passed. Commit `68d7bc7` (pushed). |
-| 6 | `/ai-image` UI | ✅ Implemented (B1–B6) and **real-generation-tested** (one Fast E2E generation on production, 2026-11-09 — see below). Reload-during-processing recovery **unverified** with a real job. |
-| 7 | Final testing + release readiness | ⏳ Pending |
+| 6 | `/ai-image` UI | ✅ Implemented (B1–B6) and **real-generation-tested** (one Fast E2E generation on production, 2026-11-09 — see below). Reload-during-processing recovery **unverified** with a real job. Commit `23cad50` (pushed). |
+| 7 | Final testing + release readiness | ✅ Done — Batch 1 (Next.js standalone output, Dockerfile, .dockerignore, .env.example audit, /api/health probes) complete. Batch 2 (Hardened Disaster Recovery & Operational Tooling: YOURAI_ENC_V3 chunk-framed streaming authenticated encryption, PBKDF2/HKDF key hierarchy, two-pass streaming DB restore, per-object safe storage reconciliation, coordinated backup sets, 65 DR tests) complete. Batch 3 (Release Hardening, Legal Policies & Final Regression): Sub-Batch 3A (HTTP security headers, strict CSP, centralized lazy Zod env validation, bounded process-local sliding window rate limiting, safe client IP trust boundary, dual liveness/readiness health probes) complete; Sub-Batch 3B (Grounded legal pages /terms, /privacy, /acceptable-use, footer/registration/composer UX discoverability, explicit disclosures of unsupported self-service deletion and India draft status, zero unbuilt moderation tooling invariants, 15 legal tests) complete; Sub-Batch 3C (Complete 760-test regression across all 12 suites, Prisma generate, TypeScript check, Next.js production build, DR documentation, Release Readiness Checklist) complete. |
 
 ## 3. Tech stack
 
@@ -99,7 +99,15 @@ Next.js 16 uses `src/proxy.ts` (formerly middleware). Repo: `github.com/Vinay098
 | Job DTO / user-safe errors / status contract | `src/features/generations/job-view.ts` |
 | Pure request validation | `src/features/generations/validation.ts` |
 | Trusted origin, capped JSON body, error envelope | `src/lib/api.ts` |
-| API routes | `src/app/api/generations/image/route.ts` (POST), `src/app/api/generations/[jobId]/route.ts` (GET), `src/app/api/assets/[assetId]/route.ts` (GET → 302) |
+| Centralized environment validation | `src/lib/env.ts` (build-time vs runtime secrets, redaction) |
+| Process-local rate limiting | `src/lib/rate-limit.ts` (sliding window, bounded entries, burst throttling) |
+| API routes | `src/app/api/generations/image/route.ts` (POST), `src/app/api/generations/[jobId]/route.ts` (GET), `src/app/api/assets/[assetId]/route.ts` (GET → 302), `src/app/api/health/route.ts` (GET, dual liveness & readiness probes) |
+| Container & deployment config | `next.config.ts` (`output: "standalone"`, CSP, HSTS, security headers), `Dockerfile` (multi-stage Alpine), `.dockerignore` |
+| Disaster recovery: Database | `scripts/backup-db.mts` (`npm run backup:db`), `scripts/restore-db.mts` (`npm run restore:db`) |
+| Disaster recovery: Storage | `scripts/backup-storage.mts` (`npm run backup:storage`), `scripts/restore-storage.mts` (`npm run restore:storage`) |
+| Disaster recovery: Coordinated Sets | `scripts/backup-set.mts` (`npm run backup:set`), `scripts/restore-set.mts` (`npm run restore:set`) |
+| Disaster recovery: Libs & Tests | `scripts/lib/backup-crypto.mts`, `scripts/lib/backup-guard.mts`, `scripts/test-disaster-recovery.mts` (`npm run test:disaster-recovery`, 65 offline tests) |
+| Release hardening tests | `scripts/test-release-hardening.mts` (`npm run test:release-hardening`, 14 offline tests) |
 | Image generator UI (client) | `src/components/image-generator/` (composer, preview, result actions, gallery, recovery notice, `use-generation.ts`) · `src/app/(dashboard)/ai-image/page.tsx` (server data) |
 | Client generation logic (framework-free, DI) | `src/features/generations/client/` — `api.ts` (typed fetch, never throws), `pending-request.ts` (localStorage, key created only on submit), `polling.ts` (pure decisions), `generation-controller.ts` (state machine + recovery), `recovery-scheduler.ts` (Strict-Mode-safe), `gallery.ts`, `download.ts` |
 | Stage 6 tests | `npm run test:ui-logic` · `test:ui-flow` · `test:ui-recovery` · `test:ui-gallery` (all offline) · `test:queries` (TEST_DATABASE_URL only) |
@@ -198,7 +206,9 @@ Lifecycle: `createImageJob` (PENDING) → `markJobStarted` (PROCESSING, commit *
 ## 9. Deployment requirements
 
 - **Build command:** run `npx prisma generate` before `next build` (e.g. `npx prisma generate && npm run build`). The generated client (`src/generated/`) is git-ignored and `npm run build` does not generate it.
-- **Runtime:** Node.js (required for `sharp` and the Postgres driver; the API routes declare `runtime = "nodejs"`). Install dependencies on the host's own platform so the correct `sharp` binary is used.
+- **Standalone output:** `next.config.ts` sets `output: "standalone"`. Production builds emit `.next/standalone` containing `server.js` and traced dependencies. In containers, copy `public/` to `./public` and `.next/static` to `./.next/static`. Run via `node server.js` with `PORT=3000` and `HOSTNAME="0.0.0.0"`.
+- **Health check:** `GET /api/health` returns HTTP 200 `{ status: "ok", timestamp: ... }` with `Cache-Control: no-store` (process-level liveness; never touches the database or external APIs). Readiness probe `GET /api/health?probe=readiness` executes an active database check (`SELECT 1` with 3000ms timeout) via dynamic Prisma import, returning HTTP 200 `{ status: "ok", checks: { process: "alive", database: "healthy" } }` or HTTP 503 `{ status: "degraded", checks: { process: "alive", database: "unhealthy" } }`.
+- **Runtime:** Node.js (required for `sharp` and the Postgres driver; the API routes declare `runtime = "nodejs"`). Install dependencies on the host's own platform so the correct `sharp` binary is used. Multi-stage `Dockerfile` uses `node:20-alpine` with `libc6-compat` and `openssl`.
 - **Request duration:** the host must allow requests of **at least 90 seconds** (`maxDuration = 90` on the generation route; 60 s provider timeout < 90 s < 5 min reconciliation).
 - **`APP_ORIGIN`:** set to the deployed public origin (comma-separated if several). If unset in production, every generation POST is rejected with 403.
 - **Never configure `TEST_DATABASE_URL` in production.**
@@ -206,3 +216,257 @@ Lifecycle: `createImageJob` (PENDING) → `markJobStarted` (PROCESSING, commit *
 - **Build-time network:** `next/font/google` downloads fonts during `next build`, so the build environment needs internet access. The build itself does not access the database, Cloudflare or Supabase (verified).
 - **Region:** host close to the database (Supabase, Tokyo) to avoid ~200 ms per query round trip.
 - **Supabase Free tier:** 1 GB storage, limited egress, project pauses after 1 week of inactivity.
+
+## 10. Disaster Recovery & Operational Runbooks
+
+Offline administrative disaster recovery tooling designed for SaaS durability, data sovereignty, and migration readiness.
+
+### Cryptographic Specification
+- **Algorithm:** Authenticated AES-256-GCM (`aes-256-gcm`).
+- **Two-Tier Key Hierarchy:**
+  - **Master Key (Tier 1):** PBKDF2-HMAC-SHA256 (`pbkdf2Sync` / `deriveMasterKeyAsync`), 600,000 iterations (OWASP standard), 16-byte random salt, 32-byte key. Derived once per backup set.
+  - **Sub-Keys (Tier 2):** Fast HKDF-SHA256 (`hkdfSync`), derived per object context (`storage:${storageKey}`) in < 1 microsecond without event-loop blocking.
+- **Envelope Formats:**
+  - **Version 3 (`YOURAI_ENC_V3`, current chunk-framed streaming):**
+    - Header (50 bytes): Magic ASCII Header (`YOURAI_ENC_V3`, 13B), Cipher suite ID (`0x01` = AES-256-GCM, 1B), KDF iterations (uint32BE, 4B), Cryptographic salt (16B), Base IV / Nonce (12B), Chunk size (uint32BE, 4B, default 65536 = 64 KB).
+    - Chunk Frames: `[Chunk Index (uint32BE, 4B)][Payload Type (0x01 mid, 0x02 final, 1B)][Ciphertext Len (uint32BE, 4B)][Ciphertext][GCM Tag (16B)]`.
+    - Per-chunk unique nonce derived deterministically from Base IV + chunk index.
+    - Authenticated Additional Data (AAD) binds magic, salt, iterations, chunk index, and payload type.
+    - **Zero unauthenticated plaintext:** Decipher verifies the GCM tag **before** releasing each chunk's plaintext.
+  - **Version 2 (`YOURAI_ENC_V2`, backward-compatible single-tag envelope):**
+    - Bytes 0–12: Magic ASCII Header (`YOURAI_ENC_V2`, 13 bytes)
+    - Byte 13: Cipher suite ID (`0x01` = AES-256-GCM)
+    - Bytes 14–17: KDF iterations (32-bit big-endian uint32, e.g. 600,000)
+    - Bytes 18–33: Cryptographic salt (16 bytes)
+    - Bytes 34–45: AES-GCM IV / Nonce (12 bytes)
+    - Bytes 46 to (EOF - 16): Ciphertext
+    - Final 16 bytes: GCM Authentication Tag
+  - **Version 1 (`YOURAI_ENC_V1`, legacy backward-compatible):**
+    - Bytes 0–12: Magic ASCII Header (`YOURAI_ENC_V1`)
+    - Bytes 13–28: Salt (16 bytes)
+    - Bytes 29–40: IV (12 bytes)
+    - Bytes 41 to (EOF - 16): Ciphertext
+    - Final 16 bytes: GCM Authentication Tag (100,000 fixed iterations)
+- **Manifest Authentication:** Manifest files (`manifest.json`, `backup-set.json`) are cryptographically authenticated via companion HMAC-SHA256 signatures (`.sig`).
+- **Passphrase Policy:** Minimum 16 characters enforced for `BACKUP_ENCRYPTION_KEY`.
+- **Security Invariant:** Plaintext database dumps and sensitive assets never touch unencrypted disk. `backups/`, `*.dump`, `*.dump.enc`, `*.sql`, `*.enc`, `*.meta.json`, `*.manifest.json`, and `.backup.lock` are git-ignored.
+
+### Coordinated Backup Sets (`npm run backup:set` / `npm run restore:set`)
+Provides atomic synchronization between the PostgreSQL database and private Supabase Storage:
+1. **Database-First Capture ($T_1$):** Captures the database dump using `pg_dump -Fc` through streaming AES-256-GCM.
+2. **Exact Reference Extraction ($T_2$):** Queries the snapshot to extract all active `GeneratedAsset.storageKey` references.
+3. **Targeted Storage Backup ($T_3$):** Downloads and encrypts only those exact referenced objects using two-tier HKDF sub-keys and atomic temporary writes (`.tmp` -> `.enc`).
+4. **Cross-Validation Verification ($T_4$):** Cross-references every database asset against disk checksums and encryption headers. If any referenced object is missing, the set is marked `FAILED_INCONSISTENT` and rejected.
+5. **Finalization:** Emits an immutable, signed manifest `backup-set.json` with status `VERIFIED`.
+- **Coordinated Runbook Commands:**
+  ```bash
+  # Create a coordinated verified backup set:
+  BACKUP_ENCRYPTION_KEY="your-strong-passphrase" npm run backup:set
+
+  # Pre-flight verify complete backup set (zero modifications):
+  BACKUP_ENCRYPTION_KEY="your-strong-passphrase" npm run restore:set -- --set backups/sets/<backupSetId> --verify-only
+
+  # Restore coordinated set (restores Storage first, then Database second):
+  BACKUP_ENCRYPTION_KEY="your-strong-passphrase" npm run restore:set -- --set backups/sets/<backupSetId> --target-db="postgres://..." --target-bucket="restored-assets"
+  ```
+
+### Database Backup & Two-Pass Streaming Restore Runbook (`pg_dump` / `pg_restore`)
+- **Requirements:** PostgreSQL client tools (`pg_dump`, `pg_restore`) available in local PATH.
+- **Backup command:**
+  ```bash
+  BACKUP_ENCRYPTION_KEY="your-strong-passphrase" npm run backup:db
+  # Or targeting a specific database:
+  DATABASE_URL="postgres://..." BACKUP_ENCRYPTION_KEY="..." npm run backup:db
+  ```
+  - **Zero-disk plaintext:** Streams `pg_dump -Fc` directly to stdout, pipes through Node.js crypto transform `createEncryptionTransform()`, and writes only the encrypted payload `.dump.enc` to `backups/db/`.
+  - **Credentials:** Uses secure temporary `PGPASSFILE` (mode 0600 on POSIX) with memory/disk shredding and cleanup.
+- **Restore command (Two-Pass Streaming with Protected Input Snapshot & V3 Chunk Verification):**
+  ```bash
+  BACKUP_ENCRYPTION_KEY="your-strong-passphrase" npm run restore:db -- --file backups/db/backup-YYYY-MM-DDTHH-mm-ss.dump.enc --target-url="postgres://..."
+  ```
+  - **Version 3 Chunk-Framed Authenticated Encryption (DR-01):** Archives use the `YOURAI_ENC_V3` format where each chunk (default 64 KB, bounds 1 KB to 16 MB) carries an independent AES-256-GCM authentication tag, deterministic nonce derived from Base IV and chunk index, and AAD binding magic, salt, iterations, chunk size, chunk index, and payload type. Frame lengths and payload types are validated immediately before buffering to fail closed against oversized frames without excessive memory allocation. PBKDF2 iterations are bounded between 100,000 and 5,000,000. Plaintext is released to downstream consumers **only after** each chunk's tag passes verification, guaranteeing zero unauthenticated plaintext can reach `pg_restore`.
+  - **Protected Input Snapshot (DR-01A):** Restores from a private, exclusively created temporary copy (`constants.COPYFILE_EXCL`) in an isolated directory. Prevents both path re-resolution races and in-place source mutation. Opens a single pinned descriptor across both passes.
+  - **Signal & Child Lifecycle Cleanup:** On `SIGINT`/`SIGTERM` or exceptions, closes file descriptors, terminates active `pg_restore` processes (`SIGTERM`), unlinks private snapshot directories, and re-emits exit codes (130/143).
+  - **Pass 1 (Pre-Flight Verification):** Streams the encrypted snapshot through `createDecryptionTransform` into a dry sink. Validates 100% of the archive and GCM auth tag in constant RAM ($O(1)$) **before** `pg_restore` is spawned. Corrupted or truncated archives fail immediately without touching the target database.
+  - **Pass 2 (Authenticated Streaming Restore):** Only after Pass 1 confirms authenticity, streams verified plaintext directly into `pg_restore.stdin` with `--single-transaction` for atomic rollback on connection drops.
+  - **Exit Code 1 Analysis (DR-01B):** Fails closed by default on exit code 1. Treats nonzero exit as fatal unless stderr consists exclusively of harmless drop notices (`pg_restore: notice: table "..." does not exist, skipping drop`).
+  - **Safety Guard:** Fails closed if the target matches production `DATABASE_URL` (canonical URL normalization equates loopback aliases, default 5432, and stripped query parameters) unless `--confirm-production-overwrite` is passed.
+
+### Supabase Storage Backup & Restore Runbook
+- **Backup command:**
+  ```bash
+  BACKUP_ENCRYPTION_KEY="your-strong-passphrase" npm run backup:storage
+  ```
+  - Process mutex lockfile (`.backup.lock`) prevents concurrent runs.
+  - Downloads objects to `.tmp` files and executes atomic verified renames.
+  - **Full Streaming Verification (DR-03A):** Incremental skip cryptographically validates the entire AES-GCM tag, plaintext SHA-256, and byte size in constant $O(1)$ RAM using the object subkey before skipping. Corrupted or tampered files are automatically re-downloaded.
+  - **Deletion Reconciliation (DR-03B):** Live deletions are tombstoned (`isDeleted = true`) in the current snapshot manifest without mutating historical recovery sets.
+  - **Domain-Separated HMAC Signatures (DR-04A):** Signs `manifest.json` using a dedicated HKDF subkey (`yourai:manifest:signature:v1`) into `manifest.json.sig`.
+- **Restore command (Per-Object Safe Reconciliation):**
+  ```bash
+  BACKUP_ENCRYPTION_KEY="your-strong-passphrase" npm run restore:storage -- --target-bucket="restored-assets"
+  ```
+  - **Fail-Closed Authentication (DR-04B):** Fails closed if `.sig` signature is missing or tampered, unless `--allow-unsigned-manifest` is explicitly provided.
+  - **Per-Object Safe Reconciliation (DR-03):** Checks each object in target bucket:
+    1. If missing: uploads with `{ upsert: false }`.
+    2. If present and plaintext SHA-256 matches: skips upload (`skippedCount++`), enabling safe retries after partial failure without destructive writes.
+    3. If present and content differs: fails closed with explicit conflict error unless `--force-destructive-overwrite` is provided.
+  - Pre-flight verifies all encrypted objects before network upload. Skips tombstoned `isDeleted` entries.
+  - Requires `--confirm-production-overwrite` if targeting the production bucket.
+
+### Coordinated Backup-Set & Restore Runbook
+- **Dump-Derived Asset Extraction (DR-02):** In `scripts/backup-set.mts`, `extractReferencedStorageKeysFromDump()` streams `pg_restore --data-only --table=GeneratedAsset` line-by-line using `node:readline` (preventing multi-gigabyte dump stdout buffering), while the extracted key inventory consumes memory proportional to the number and length of storage keys ($O(N)$ in key count).
+- **Character-by-Character COPY Decoder:** `decodePostgresCopyField()` properly decodes PostgreSQL COPY text format, distinguishing literal `\\t` (a backslash and letter 't') from `\t` (tab character), handling `\N` (NULL), newlines, carriage returns, hex (`\xhh`), and octal (`\ooo`) escapes. Fails closed if a COPY block begins but ends before the `\.` end-of-data marker.
+- **Coordinated Restore Failure Modes & Safe Recovery:**
+  - *Storage fails during Step 1:* Database remains untouched; existing database is unaffected. Safe retry via `npm run restore:set` resumes without re-uploading already reconciled objects.
+  - *Storage succeeds (Step 1), Database fails (Step 2):* Database rolls back atomically (`--single-transaction`). Storage objects are dormant (protected by database ownership lookups). Fix database issue and rerun `restore:set` or `restore:db`. Identical storage objects are skipped automatically during rerun.
+
+### Consistency, Skew & Concurrency
+- **Foreign Reference Structure:** The database table `GeneratedAsset` holds `storageKey` strings pointing to private objects in Supabase Storage.
+- **Safe Recovery Order:** Always restore **Storage objects first**, then restore **Database second**.
+- **Point-in-Time Skew Scenarios:**
+  - *Storage newer than DB:* Storage contains unreferenced image files. Completely harmless; assets cannot be queried or leaked because database ownership lookup gates all access.
+  - *DB newer than Storage:* Database contains asset rows referencing storage keys that do not exist (causes 404 on viewing/downloading). Coordinated backup sets eliminate this skew by capturing DB first and extracting exact keys.
+- **Concurrent Generation & Deletion:**
+  - In YourAI, images are generated immutably.
+  - Soft deletion in database ensures storage objects remain available during active backup windows.
+  - True snapshot isolation across two independent systems (PostgreSQL and Supabase Storage) requires freezing uploads or a retention period before hard deletion.
+
+### Operational Drill Status & Isolated Restore Disclosure
+- **Tooling Verification:** The DR tooling, chunk-framed cryptographic engine (`YOURAI_ENC_V3`), streaming transforms, line-by-line COPY parser, and safety guards are exhaustively verified across 65 unit and integration tests (`scripts/test-disaster-recovery.mts`).
+- **Live Restore Drill Pending:** An end-to-end restore into an actual isolated live database project has not yet been executed in production. A full-scale isolated environment restore drill is scheduled as a pre-launch operational verification task before public launch.
+
+## 11. Security Hardening, Rate Limiting & Environment Validation (Stage 7 Batch 3A)
+
+### Security Headers & Content Security Policy (CSP)
+- **Configuration:** `next.config.ts` exports `getSecurityHeaders(isDev)` and applies them to all routes (`source: "/(.*)"`).
+- **CSP Directives:**
+  - `default-src 'self'`
+  - `script-src 'self' 'unsafe-inline'` in production (explicitly excludes `'unsafe-eval'`; `'unsafe-eval'` is permitted exclusively in development for Fast Refresh / DevTools).
+  - **Inline Script Trade-Off:** Next.js 16 App Router requires inline hydration scripts for React 19. Standalone static builds make dynamic per-request nonce injection impractical without forcing all pages dynamic. Trade-off: `'unsafe-inline'` is retained for scripts and styles; XSS protection relies on React JSX automatic escaping, strict Zod request schema validation, and complete absence of `dangerouslySetInnerHTML`.
+  - `style-src 'self' 'unsafe-inline' https://fonts.googleapis.com`
+  - `font-src 'self' https://fonts.gstatic.com data:`
+  - `img-src 'self' data: blob: https://*.supabase.co https://*.cloudflare.com`
+  - `connect-src 'self' https://*.supabase.co https://api.cloudflare.com`
+  - `frame-ancestors 'none'`, `base-uri 'self'`, `form-action 'self'`
+- **HSTS Policy:** `Strict-Transport-Security: max-age=31536000` is applied **only** in production (`NODE_ENV === "production"`), strictly **without** `includeSubDomains` to prevent impacting sibling domains or local/tunnel environments.
+- **Additional Standard Headers:**
+  - `X-Frame-Options: DENY` (clickjacking defense)
+  - `X-Content-Type-Options: nosniff` (MIME sniffing defense)
+  - `Referrer-Policy: strict-origin-when-cross-origin`
+  - `Permissions-Policy: camera=(), microphone=(), geolocation=(), interest-cohort=()`
+
+### Centralized Environment Validation (`src/lib/env.ts`)
+- **Build vs Runtime Separation:** Centralized Zod schemas cleanly separate static build-time requirements (`buildEnvSchema`: `NODE_ENV`, `PORT`, `HOSTNAME`) from server-only runtime secrets (`serverRuntimeEnvSchema`: `DATABASE_URL`, `AUTH_SECRET`, `AUTH_TRUST_HOST`, `APP_ORIGIN`, `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_AI_API_TOKEN`, `SUPABASE_URL`, `SUPABASE_SECRET_KEY`, `SUPABASE_STORAGE_BUCKET`).
+- **Static Build Compatibility:** `next build` static page generation completes successfully without live production secrets or database access.
+- **Lazy Runtime Boundary:** Protected services validate environment variables lazily via `validateRuntimeEnv()` and `assertRuntimeEnv()`.
+- **Zero Secret Leakage:** Validation error messages and sanitized diagnostic status (`getSanitizedEnvStatus()`) strictly redact all secret values and connection strings.
+
+### Process-Local Best-Effort Rate Limiting & Client IP Trust Model (`src/lib/rate-limit.ts`)
+- **Algorithm:** In-memory sliding window counter (`InMemoryRateLimiter`).
+- **Memory Bounds & Cleanup:** Maximum 10,000 tracked keys with automatic periodic cleanup of expired windows (15 min interval).
+- **Client IP Trust Boundaries & Anti-Spoofing:**
+  - `trustModel === "none"` (default): Without an established, network-level trusted reverse proxy boundary, all client-supplied forwarding headers (`X-Forwarded-For`, `X-Real-IP`, `CF-Connecting-IP`, `CF-Ray`) are strictly untrusted and ignored. The derived client identity falls back safely to `"127.0.0.1"`. Attackers cannot rotate or forge headers to evade IP-based rate limiting.
+  - `trustModel === "cloudflare"`: May **only** be enabled (`TRUST_PROXY=cloudflare`) when the deployment network infrastructure guarantees that the origin server cannot be reached directly by untrusted clients (e.g. via Cloudflare Tunnel / `cloudflared`, Authenticated Origin Pulls / mTLS, or strict firewall ingress allowing only Cloudflare IP ranges).
+  - **CF-Ray Threat Model Correction:** `CF-Ray` is a non-cryptographic diagnostic request identifier, NOT a cryptographic signature or proof of origin authenticity. Any direct HTTP client connecting to an unprotected origin can fabricate both `CF-Connecting-IP` and `CF-Ray`. Header presence alone is never sufficient proof of a trusted proxy.
+  - **Deployment Prerequisite & Limitation:** Because no production hosting or network ingress boundary has been established yet, `TRUST_PROXY=cloudflare` **must remain disabled**. The safe fallback (`"127.0.0.1"`) is used.
+  - **Documented Deployment Limitation:** In direct/untrusted deployments, all clients sharing the fallback IP share the IP-level burst limits (5 registrations/15m, 10 logins/15m, 10 generation requests/min).
+  - **Authoritative Compensating Protections:**
+    - Login enforces independent, unshared account-level throttling (`login:account:${normalizedEmail}`, 5 attempts / 15m), which is immune to IP sharing.
+    - PostgreSQL ACID transactions remain the sole authoritative enforcement boundary for generation daily limits (10/day), concurrency (1 active job), and credit wallet balances. Process-local rate limiting is strictly best-effort burst abuse mitigation. Zero Redis or paid infrastructure is introduced.
+- **Configured Burst Limits:**
+  - Registration: 5 requests / 15 minutes per IP (`REGISTER_IP`).
+  - Login: 10 requests / 15 minutes per IP (`LOGIN_IP`), plus 5 requests / 15 minutes per normalized email address (`LOGIN_ACCOUNT`).
+  - Generation API: 10 requests / 1 minute per IP (`GENERATION_BURST`), returning HTTP 429 `RATE_LIMITED` with `Retry-After` header.
+
+### Dual Health Check Probes (`src/app/api/health/route.ts`)
+- **Liveness Probe (`GET /api/health`):** Instant process-level check returning HTTP 200 `{ status: "ok", timestamp: ... }` with `Cache-Control: no-store`. Never touches the database or external APIs.
+- **Readiness Probe (`GET /api/health?probe=readiness`):** Active database health probe using dynamic lazy Prisma import, executing `SELECT 1` with a 3000ms timeout. Returns HTTP 200 `{ status: "ok", checks: { process: "alive", database: "healthy" } }` or HTTP 503 `{ status: "degraded", checks: { process: "alive", database: "unhealthy" } }`.
+
+## Stage 7, Batch 3, Sub-Batch 3B: Grounded User-Facing Legal Policies & UX Discoverability (ACCEPTED & VERIFIED)
+
+### 1. Grounded Legal Policy Pages
+All policies strictly reflect actual architecture, verified pricing, actual data models, and truthful enforcement capabilities:
+- **Terms of Service (`/terms`):**
+  - Explains current text-to-image service based on FLUX.1 Schnell on Cloudflare Workers AI.
+  - Initial registration grant: 100 promotional credits (`INITIAL_CREDITS`).
+  - Pricing: Fast = 1 credit, Detailed = 2 credits (`IMAGE_QUALITIES`).
+  - Authoritative daily quota: 10 counted generation jobs per UTC day (`DAILY_USER_IMAGE_LIMIT`).
+  - Concurrency limit: Maximum 1 active generation job per account.
+  - **Credit Accounting & Failure Restoration:** Clearly distinguishes non-redeemable/non-cash promotional units from automatic wallet credit restoration. Documents the exact implemented failure conditions that restore credits: (1) upstream provider rejection / pre-flight failure, (2) downstream pipeline processing failure (decode, WebP, upload, asset DB insert), and (3) stale-job timeout reconciliation. Discloses that completed generations are final and non-refundable for aesthetic dissatisfaction.
+  - Disclaims output uniqueness, accuracy, safety, and commercial fitness.
+  - **Governing Law & Dispute Resolution (Draft Provisions):** Designates India as the target legal system in draft terms; explicitly flags territorial venue, judicial forum, and dispute resolution mechanisms as provisional placeholders subject to formal qualified legal counsel review once the operating corporate entity and registered seat are established.
+  - Discloses pre-release status; operator contact reserved for official publication prior to launch.
+- **Privacy Policy (`/privacy`):**
+  - Documents actual account data: email, display name, bcryptjs password hashes (never stored or logged in plaintext).
+  - Documents authentication: Auth.js v5 JWT session cookies (`authjs.session-token`) with `HttpOnly`, `SameSite=Lax`, and `Secure` flags.
+  - Documents generation records: prompts, quality parameters, credit ledger transactions, and generated assets.
+  - Subprocessors: Supabase (PostgreSQL & object storage in Tokyo, Japan / AWS ap-northeast-1) and Cloudflare Workers AI (neural model inference).
+  - Private asset storage: Direct unauthenticated bucket access disabled; assets accessible only via time-limited 10-minute (600s) HMAC-signed URLs issued after session ownership verification.
+  - Client storage: `localStorage` used solely for client-side crash/refresh recovery of pending generation requests. Zero third-party tracking cookies or marketing beacons.
+  - Data Retention & Deletion: Explicitly discloses that automated self-service account deletion is currently unsupported in software.
+- **Acceptable Use Policy (`/acceptable-use`):**
+  - Zero tolerance for Child Sexual Abuse Material (CSAM/CSAE) with immediate permanent account termination. Carefully qualified language reserving the right to refer violations to competent authorities where legally required or appropriate, subject to legal review. Discloses that no automated direct reporting API integration is currently operational.
+  - Unconditional prohibition of Non-Consensual Intimate Imagery (NCII), unauthorized deepfakes of real individuals, hate speech, harassment, violence, terrorism, fraud, phishing, and malware.
+  - Prohibits system abuse: bypassing rate limits, exploiting concurrency or daily quotas, payload abuse beyond the 2048-character prompt maximum (`PROMPT_MAX_LENGTH`).
+  - **Truthful Enforcement Transparency (Zero False Claims):** Truthfully discloses that the current inference pipeline does NOT incorporate automated pre-inference safety filters or computer-vision moderation classifiers, and that the software does NOT currently contain internal administrative moderation dashboards, abuse queues, or automated suspension tooling. Technical controls implemented in software are strictly: (1) server-side schema validation (character limits, UTF-8, malformed JSON rejection), (2) process-local burst rate limiters, and (3) PostgreSQL transactional quotas. The policy contractually reserves YourAI's legal right to restrict, suspend, or terminate accounts, while explicitly noting that operational abuse-intake and administrative review workflows are pre-launch operational items.
+
+### 2. UX Discoverability & Navigation Touchpoints
+- **Legal Navigation Routes (`src/lib/constants.ts`):** Defined `LEGAL_ROUTES` (`terms`, `privacy`, `acceptableUse`) and linked into `ROUTES`.
+- **Site Footer (`src/components/layout/footer.tsx`):** Added a dedicated "Legal" column with links to all 3 policies and responsive grid adjustment (`md:grid-cols-[1.3fr_repeat(4,1fr)]`), plus bottom-bar quick links.
+- **Registration Form (`src/features/auth/components/register-form.tsx`):** Added explicit agreement disclaimer notice with direct links to Terms of Service, Privacy Policy, and Acceptable Use Policy above the submit button.
+- **Image Generator Composer (`src/components/image-generator/prompt-editor.tsx` & `image-generator.tsx`):** Added clear compliance reminders linking to `/acceptable-use` below the prompt editor and below the Generate button.
+- **Settings Dashboard (`src/app/(dashboard)/settings/page.tsx`):** Added "Data, Privacy & Legal" panel with policy links, private asset storage details (Tokyo region, 10-minute signed URLs), and explicit disclosure regarding unsupported self-service account deletion.
+
+### 3. Explicit Disclosures & Pre-Launch Blockers Recorded
+- **Pre-Public-Launch Blocker — Missing Verified Operator Contact:** The application currently has no verified support, legal, or grievance officer email address. Fictitious email addresses were strictly forbidden and omitted. Formal publication of official operator support and legal notice channels is recorded as an **explicit blocking requirement prior to public commercial launch**.
+- **Software Limitation — Unsupported Self-Service Account Deletion:** Due to active budget reservations and relational ledger foreign keys, automated cascading deletion is currently unsupported in software. All legal pages and user settings accurately disclose this constraint without false self-service claims. Manual deletion workflows must be designed and implemented before public launch.
+- **Outstanding Legal Review — Governing Law & Dispute Resolution Clauses:** Terms currently contain preliminary draft clauses designating the laws of India. Forum, jurisdiction, and dispute resolution procedures are explicitly provisional and flagged for qualified legal counsel review once the operating legal entity is incorporated.
+- **Operational Status — Policy Rights vs Implemented Capabilities:** Policies strictly separate contractual rights from software capabilities. No automated law enforcement reporting API (e.g. NCMEC API), automated pre-inference prompt moderation filter, administrative moderation dashboard, abuse-intake queue, or account suspension controls are implemented in software (the `User` schema has no status or suspension flags). Enforcement at runtime is limited to server input validation, process-local rate limits, and PostgreSQL quotas; abuse-intake workflows and administrative review tooling are pre-launch operational items.
+
+### 4. Verification Matrix (760 total tests across 12 suites)
+- `test:disaster-recovery` (65/65 passed)
+- `test:adapters` (119/119 passed)
+- `test:api` (161/161 passed)
+- `test:ui-logic` (97/97 passed)
+- `test:ui-flow` (67/67 passed)
+- `test:ui-recovery` (59/59 passed)
+- `test:ui-gallery` (39/39 passed)
+- `test:release-hardening` (16/16 passed)
+- `test:legal` (15/15 passed)
+- `test:accounting` (65/65 passed, dedicated test DB)
+- `test:integration` (28/28 passed, dedicated test DB)
+- `test:queries` (29/29 passed, dedicated test DB)
+- **Total Tests: 760 passed, 0 failed across all 12 suites**
+- `npx prisma generate` (Prisma Client 7.10.1 generated successfully)
+- `npx tsc --noEmit` (0 errors)
+- `next build` (16/16 pages statically prerendered and optimized successfully)
+
+## 12. Release Readiness Checklist & Final Review (Stage 7 Closure)
+
+### Category A: Implemented & Verified
+- [x] **Production Standalone Build:** `next.config.ts` configured with `output: "standalone"`, generating `.next/standalone` and `.next/static`.
+- [x] **Container Deployment Assets:** Multi-stage Alpine `Dockerfile` and comprehensive `.dockerignore` excluding `.env`, `.git`, `backups`, and dumps.
+- [x] **Environment Validation:** Centralized Zod validation (`src/lib/env.ts`) separating build-time configuration from runtime secrets; zero secrets logged or leaked in error messages.
+- [x] **Security Headers & CSP:** Production CSP with strict directives, Google Fonts & Supabase whitelisting, script execution without `'unsafe-eval'`, and 1-year HSTS without `includeSubDomains`.
+- [x] **Process-Local Rate Limiting:** Bounded in-memory sliding window limiter (`src/lib/rate-limit.ts`) protecting registration, login, and generation endpoints against casual burst abuse; maximum 10,000 tracked keys with automatic expiration cleanup.
+- [x] **Safe Client IP Strategy:** Strict fallback to `"127.0.0.1"` under default `trustModel: "none"`; client-supplied forwarding headers (`X-Forwarded-For`, `X-Real-IP`, `CF-Connecting-IP`, `CF-Ray`) rejected without an established network ingress boundary. CF-Ray documented as non-cryptographic.
+- [x] **Authoritative Accounting & Quotas:** PostgreSQL ACID transactions enforce generation allowances (10/day), concurrency (1 active job), and credit balances. Process-local rate limiting is strictly secondary burst protection.
+- [x] **Dual Health Check Probes:** `/api/health` process liveness probe (never touches external services) and `/api/health?probe=readiness` active database probe (`SELECT 1` with 3-second timeout).
+- [x] **Hardened Disaster Recovery Tooling:** Version 3 chunk-framed authenticated encryption (`YOURAI_ENC_V3`), PBKDF2 (600k iterations) / HKDF key hierarchy, two-pass streaming DB restore with pre-flight verification, per-object storage reconciliation, dump-derived storage key extraction ($O(N)$ memory), signed HMAC manifests, and accidental overwrite guards.
+- [x] **Grounded Legal Policies:** `/terms`, `/privacy`, and `/acceptable-use` accurately reflect actual image generation pricing (1 credit Fast / 2 credits Detailed), 100 promotional credits, 10 daily jobs, Tokyo Supabase Storage, 10-minute signed URLs, and 3 failure credit restoration conditions.
+- [x] **Legal UX Touchpoints:** Responsive Footer navigation, Registration agreement disclaimer, Composer/PromptEditor compliance notices, and Settings "Data, Privacy & Legal" panel.
+- [x] **Negative Invariants Verified:** No fabricated emails, no false automated moderation claims, no false self-service account deletion claims, and no unbuilt operational moderation queues.
+- [x] **Exhaustive Test Suite:** 760 passing tests across 12 suites, clean TypeScript check, and successful Next.js production build.
+
+### Category B: Implemented but Not Fully Runtime-Verified
+- [ ] **Docker Container Live Runtime:** Dockerfile and `.dockerignore` are syntactically and architecturally complete. Live container execution and networking could not be runtime-verified because Docker daemon is not available in the current development environment.
+- [ ] **End-to-End Isolated Database Restore Exercise:** Disaster recovery scripts, cryptographic streaming transforms, and restore safety guards are fully verified via unit and integration tests (65/65 passing). However, an end-to-end restore into an actual isolated live PostgreSQL instance has not yet been executed.
+
+### Category C: Pre-Launch Operational & Legal Blockers (Must resolve before public launch)
+1. **Missing Verified Operator Contact Channels:** The application currently contains no verified support, legal, or grievance officer email address. Fictitious email addresses were strictly forbidden and omitted. Formal publication of official operator support and legal notice channels is mandatory before public commercial launch.
+2. **Unsupported Self-Service Account Deletion:** Due to active budget reservations and relational ledger foreign keys, automated cascading account deletion is currently unsupported in software. A safe manual operator runbook or software deletion workflow must be implemented before opening registration to the general public.
+3. **Unbuilt Abuse-Intake & Administrative Moderation Tooling:** Zero administrative review tools, abuse intake endpoints, or account suspension flags exist in the current schema/codebase (User schema has no status or suspension flags). Administrative moderation dashboards and abuse queues must be developed before launch.
+4. **India Governing Law & Dispute Resolution Draft Status:** Preliminary draft terms designate India as the governing jurisdiction. Territorial venue, judicial forum, and dispute resolution mechanisms are provisional and require review and formalization by qualified legal counsel once the operating corporate entity and registered seat are finalized.
+5. **Production Deployment & Network Ingress Boundary:** The application has not yet been hosted or deployed to production infrastructure. The trusted proxy boundary (`TRUST_PROXY=cloudflare`) cannot be enabled until network ingress (e.g. Cloudflare Tunnel or Authenticated Origin Pulls) is configured to block direct client access to the origin server.
+6. **Multi-Instance Abuse Prevention:** Process-local rate limiting does not synchronize across horizontal server replicas or serverless instances. Multi-instance rate limiting (e.g., Redis or Cloudflare WAF rate limiting) must be evaluated if scaling horizontally.

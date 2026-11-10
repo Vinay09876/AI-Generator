@@ -1,8 +1,10 @@
 "use client";
 
 import { useEffect, useId, useRef, useState } from "react";
+import Link from "next/link";
 import { History, Wand2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ROUTES } from "@/lib/constants";
 import { IMAGE_QUALITIES, PROMPT_MAX_LENGTH, isImageQuality, type ImageQuality } from "@/features/generations/config";
 import type { GenerationPhase, GenerationState } from "@/features/generations/client/generation-controller";
 import {
@@ -231,6 +233,16 @@ export function ImageGenerator({ userId, balance, dailyUsed, dailyLimit, activeJ
             <Wand2 className="size-4" aria-hidden />
             Generate image
           </Button>
+          <p className="text-center text-xs text-muted">
+            All prompts and generations must adhere to our{" "}
+            <Link
+              href={ROUTES.acceptableUse}
+              className="text-foreground/80 underline decoration-white/20 underline-offset-4 hover:text-foreground"
+            >
+              Acceptable Use Policy
+            </Link>
+            .
+          </p>
         </div>
       </form>
 

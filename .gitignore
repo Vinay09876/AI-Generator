@@ -26,6 +26,16 @@ npm-debug.log*
 # TypeScript
 *.tsbuildinfo
 
+# Backups & local database dumps
+backups/
+*.dump
+*.dump.enc
+*.sql
+*.sql.gz
+*.enc
+*.meta.json
+*.manifest.json
+
 # OS files
 .DS_Store
 Thumbs.db

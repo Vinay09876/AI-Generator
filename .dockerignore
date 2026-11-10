@@ -1,0 +1,30 @@
+# Dependencies & build outputs
+node_modules
+.next
+out
+
+# Git & editor
+.git
+.gitignore
+.vscode
+.idea
+
+# Environment files & secrets (pass via runtime environment)
+.env
+.env*.local
+.env.development
+.env.test
+.env.production
+
+# Backups & local dumps
+backups
+*.dump
+*.sql
+*.sql.gz
+
+# Logs & temp files
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.turbo

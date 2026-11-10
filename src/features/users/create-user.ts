@@ -2,6 +2,8 @@ import { CreditTransactionType, Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
 import { INITIAL_CREDITS } from "@/lib/constants";
 
+const TX_OPTIONS = { maxWait: 10_000, timeout: 20_000 } as const;
+
 export class EmailAlreadyRegisteredError extends Error {
   constructor() {
     super("An account with this email already exists.");
@@ -48,7 +50,7 @@ export async function createUserWithWallet({ name, email, passwordHash }: Create
       });
 
       return { id: user.id, name: user.name, email: user.email };
-    });
+    }, TX_OPTIONS);
   } catch (error) {
     // P2002 = unique constraint violation. The only user-supplied unique field is email.
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {

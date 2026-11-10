@@ -3,6 +3,7 @@ import { after } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { resolveTrustedOrigins } from "@/lib/api";
+import { defaultRateLimiter, RATE_LIMITS } from "@/lib/rate-limit";
 import { getSignedAssetUrl } from "./assets";
 import { runImageGeneration, type GenerationDeps } from "./generate-image";
 import { createGenerationHandlers } from "./http";
@@ -47,4 +48,5 @@ export const generationHandlers = createGenerationHandlers({
     }),
   reconcileGlobal: () => lifecycle.reconcileStaleJobs({ limit: 10 }),
   signAssetUrl: (userId, assetId) => getSignedAssetUrl({ userId, assetId, storage: getObjectStorage() }),
+  checkRateLimit: (key) => defaultRateLimiter.check(key, RATE_LIMITS.GENERATION_BURST),
 });

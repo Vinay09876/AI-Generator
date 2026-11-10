@@ -1,6 +1,8 @@
 "use client";
 
 import { useId, useRef } from "react";
+import Link from "next/link";
+import { ROUTES } from "@/lib/constants";
 import { formatNumber } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
@@ -93,7 +95,14 @@ export function PromptEditor({
         </p>
       ) : (
         <p id={hintId} className="mt-2 text-xs text-muted">
-          Describe the subject, style, lighting and mood.
+          Describe the subject, style, lighting and mood. Must comply with our{" "}
+          <Link
+            href={ROUTES.acceptableUse}
+            className="text-foreground/80 underline decoration-white/20 underline-offset-4 hover:text-foreground"
+          >
+            Acceptable Use Policy
+          </Link>
+          .
           {/* Keyboard shortcut: own line, never split mid-shortcut; hidden on touch-first widths. */}
           <span className="mt-1 hidden whitespace-nowrap sm:block">
             <kbd className="rounded border border-white/15 bg-white/[0.04] px-1 font-sans text-[11px]">Ctrl</kbd> /{" "}

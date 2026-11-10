@@ -44,6 +44,15 @@
     "test:queries": "tsx --conditions=react-server scripts/test-image-queries-integration.mts",
     "test:ui-flow": "tsx scripts/test-image-generation-flow.mts",
     "test:ui-recovery": "tsx scripts/test-image-recovery.mts",
-    "test:ui-gallery": "tsx scripts/test-image-gallery.mts"
+    "test:ui-gallery": "tsx scripts/test-image-gallery.mts",
+    "test:disaster-recovery": "tsx scripts/test-disaster-recovery.mts",
+    "test:release-hardening": "tsx scripts/test-release-hardening.mts",
+    "test:legal": "tsx scripts/test-legal-policies.mts",
+    "backup:db": "tsx scripts/backup-db.mts",
+    "restore:db": "tsx scripts/restore-db.mts",
+    "backup:storage": "tsx scripts/backup-storage.mts",
+    "restore:storage": "tsx scripts/restore-storage.mts",
+    "backup:set": "tsx scripts/backup-set.mts",
+    "restore:set": "tsx scripts/restore-set.mts"
   }
 }

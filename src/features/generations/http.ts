@@ -1,4 +1,5 @@
 import { errorResponse, isPlainObject, isTrustedOrigin, jsonResponse, readJsonBody } from "@/lib/api";
+import { extractClientIp } from "@/lib/rate-limit";
 import { GENERATION_REQUEST_MAX_BODY_BYTES } from "./config";
 import type { AccountingErrorCode } from "./errors";
 import type { GenerationRunResult } from "./generate-image";
@@ -27,6 +28,8 @@ export type GenerationHttpDeps = {
   /** Ownership-checked signed URL; throws AssetAccessError for missing / not owned. */
   signAssetUrl: (userId: string, assetId: string) => Promise<string>;
   log?: { error(message: string, data?: Record<string, unknown>): void };
+  /** Optional process-local burst throttle. */
+  checkRateLimit?: (key: string) => { allowed: boolean; retryAfterSeconds: number };
 };
 
 const ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
@@ -103,6 +106,21 @@ export function createGenerationHandlers(deps: GenerationHttpDeps) {
       }
       const userId = await deps.getUserId();
       if (!userId) return unauthenticated();
+
+      // Process-local burst throttling (best-effort; Postgres enforces authoritative limits)
+      if (deps.checkRateLimit) {
+        const ip = extractClientIp(request.headers);
+        const limitCheck = deps.checkRateLimit(`gen:ip:${ip}`);
+        if (!limitCheck.allowed) {
+          return errorResponse(
+            429,
+            "RATE_LIMITED",
+            "Too many generation requests. Please slow down.",
+            {},
+            { "Retry-After": String(limitCheck.retryAfterSeconds) },
+          );
+        }
+      }
 
       const idempotencyKey = request.headers.get("idempotency-key");
       if (!isValidIdempotencyKey(idempotencyKey)) {

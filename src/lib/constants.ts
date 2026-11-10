@@ -12,6 +12,12 @@ export const NAV_LINKS = [
   { label: "Pricing", href: "/#pricing" },
 ] as const;
 
+export const LEGAL_ROUTES = {
+  terms: "/terms",
+  privacy: "/privacy",
+  acceptableUse: "/acceptable-use",
+} as const;
+
 export const ROUTES = {
   home: "/",
   login: "/login",
@@ -20,6 +26,9 @@ export const ROUTES = {
   aiImage: "/ai-image",
   aiVideo: "/ai-video",
   videoClipper: "/video-clipper",
+  terms: LEGAL_ROUTES.terms,
+  privacy: LEGAL_ROUTES.privacy,
+  acceptableUse: LEGAL_ROUTES.acceptableUse,
 } as const;
 
 export const APP_ROUTES = {

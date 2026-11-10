@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Coins, KeyRound, ShieldCheck, UserRound } from "lucide-react";
+import { Coins, FileText, KeyRound, ShieldCheck, UserRound } from "lucide-react";
 import { auth } from "@/lib/auth";
 import { ROUTES } from "@/lib/constants";
 import { formatDate, formatNumber } from "@/lib/format";
@@ -94,6 +95,45 @@ export default async function SettingsPage() {
           </dl>
           <div className="mt-6 flex justify-end border-t border-white/[0.06] pt-5">
             <LogoutButton className="border border-white/10 px-4" />
+          </div>
+        </Panel>
+      </RevealItem>
+
+      <RevealItem>
+        <Panel icon={FileText} title="Data, Privacy & Legal">
+          <div className="space-y-4">
+            <p className="text-sm text-muted">
+              Review our grounded policies governing data governance, platform usage, and credit accounting:
+            </p>
+            <div className="flex flex-wrap gap-3">
+              <Link
+                href={ROUTES.terms}
+                className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs text-foreground/90 transition-colors hover:border-violet/40 hover:text-white"
+              >
+                Terms of Service
+              </Link>
+              <Link
+                href={ROUTES.privacy}
+                className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs text-foreground/90 transition-colors hover:border-violet/40 hover:text-white"
+              >
+                Privacy Policy
+              </Link>
+              <Link
+                href={ROUTES.acceptableUse}
+                className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs text-foreground/90 transition-colors hover:border-violet/40 hover:text-white"
+              >
+                Acceptable Use Policy
+              </Link>
+            </div>
+
+            <div className="mt-4 space-y-2 rounded-2xl border border-white/[0.06] bg-white/[0.02] p-4 text-xs leading-relaxed text-muted">
+              <p>
+                <strong>Asset Storage:</strong> Generated images are stored in a private Supabase Storage bucket in Tokyo (AWS ap-northeast-1). Access is restricted to 10-minute HMAC-signed URLs issued only after session ownership verification.
+              </p>
+              <p>
+                <strong>Account Deletion:</strong> Self-service account deletion is currently unsupported in software. Active budget reservations and relational credit ledger constraints prevent automated cascading deletion. Official operator contact and manual deletion procedures will be published prior to public launch.
+              </p>
+            </div>
           </div>
         </Panel>
       </RevealItem>
