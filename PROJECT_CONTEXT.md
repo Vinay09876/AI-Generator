@@ -31,7 +31,8 @@ AI Image & Video Generator roadmap:
 | 7 | Final testing + release readiness | ✅ Done — Batch 1 (Next.js standalone output, Dockerfile, .dockerignore, .env.example audit, /api/health probes) complete. Batch 2 (Hardened Disaster Recovery & Operational Tooling: YOURAI_ENC_V3 chunk-framed streaming authenticated encryption, PBKDF2/HKDF key hierarchy, two-pass streaming DB restore, per-object safe storage reconciliation, coordinated backup sets, 65 DR tests) complete. Batch 3 (Release Hardening, Legal Policies & Final Regression): Sub-Batch 3A (HTTP security headers, strict CSP, centralized lazy Zod env validation, bounded process-local sliding window rate limiting, safe client IP trust boundary, dual liveness/readiness health probes) complete; Sub-Batch 3B (Grounded legal pages /terms, /privacy, /acceptable-use, footer/registration/composer UX discoverability, explicit disclosures of unsupported self-service deletion and India draft status, zero unbuilt moderation tooling invariants, 15 legal tests) complete; Sub-Batch 3C (Complete 760-test regression across all 12 suites, Prisma generate, TypeScript check, Next.js production build, DR documentation, Release Readiness Checklist) complete. Commit `d681411` (pushed). |
 | 8 | AI Video Generator | ✅ Complete — Batch 0 (Feasibility & Architecture) complete; Batch 1 (Domain config, pricing, types, MockVideoProvider, MP4 fixture & Ed25519 webhook boundary; 83 tests) complete; Batch 2A (DB schema, migrations & lifecycle state machine; 70 tests) complete; Batch 2B (Streaming storage ingestion, SSRF IP pinning, thumbnail boundary & signed URLs; 116 tests) complete; Batch 3 (Fal.ai provider adapter, Ed25519 webhook verification, durable persistence, concurrency-safe leases, cron reconciliation & 15m timeout sweep; 161 tests) complete; Batch 4 (Generation APIs & client synchronization layer, including cryptographically bound delayed webhook correlation token verification; 103 tests) complete; Batch 5 (Premium AI Video Generator UI at `/ai-video`, cinematic player, gallery & component tests; 74 tests) complete; Batch 6 (Legal Policy Reconciliation, UI Review, Full Regression & Release Readiness; 20 legal tests, 1,027 total offline regression tests passing) complete. Live Fal.ai E2E trial deferred pending explicit authorization. |
 | 8.1 | Staging Readiness Assessment | ✅ Complete — Comprehensive staging readiness audit across secrets, migrations, Supabase storage, Fal.ai ingress, cron scheduling, operator tooling, diagnostics, offline/live test boundaries, and 7-phase staging setup checklist. |
-| 8.2 | Zero-Cost Operational Preparation | ✅ Complete — Production Operator CLI (`scripts/resolve-ambiguous-job.mts`) with physical storage verification, Account Deletion SOP (`docs/runbooks/account-deletion-sop.md`), Staging Runbook (`docs/runbooks/staging-setup-runbook.md`), 74 CLI safety tests, 1,196 passing offline tests across 15 suites. |
+| 8.2 | Zero-Cost Operational Preparation | ✅ Complete — Production Operator CLI (`scripts/resolve-ambiguous-job.mts`) with physical storage verification, Account Deletion SOP (`docs/runbooks/account-deletion-sop.md`), Staging Runbook (`docs/runbooks/staging-setup-runbook.md`), 74 CLI safety tests, 1,196 passing offline tests across 15 suites. Commit `c6b73f3` (pushed). |
+| 9 | AI Video Clipper | 🔄 In Progress — Batch 0 approved; Batch 1 (Domain Config, VideoSource Abstraction, Types, Validation, Storage Keys & Mock Engine; 43 tests) complete; Batch 2 (Database Schema Reusability, Job Lifecycle State Machine, Dynamic Multi-Clip Credit Accounting, Ingestion Leases, Terminal Guards, Idempotent Refunds, Decoupled Cleanup & Lease Fencing; 25 tests) complete; Batch 3 (Subprocess Runner & Security Boundary, FFprobe Metadata Extraction, Audio Demuxing & Silence Detection, Scene Cut Detection, Multi-Format Whisper Parser with Interpolation Safeguard, Deterministic Highlight Scoring, High-Contrast ASS/SRT Karaoke Generator; 34 tests) complete; Batch 4 (FFmpeg filter graphs & argument builder, output validation, WebP poster frames, FfmpegClipperEngine, lease-fenced worker orchestration, streaming output ingestion, orphan/source cleanup & retry sweep; 69 tests + 6 lifecycle tests, 3 real-FFmpeg tests SKIPPED — no FFmpeg on dev machine, real encode NOT verified) complete; Batch 5 (direct-to-storage upload workflow with fail-closed, lock-serialised quota; clip job API & job view; worker process with job pickup and graceful/hard shutdown; scene & pacing planner — speech analysis/captions explicitly unavailable; maintenance cron for stale jobs, cleanup retries and abandoned uploads; browser client controller; 73 tests + 4 lifecycle tests) complete. Batches 1–5 uncommitted. |
 
 ## 3. Tech stack
 
@@ -663,7 +664,7 @@ All policies strictly reflect actual architecture, verified pricing, actual data
     - Production Execution Mechanisms (Zero Paid Infrastructure):
       1. Immediate dispatch on webhook receipt via Next.js `after()` or asynchronous non-blocking task.
       2. Client polling fallback: `GET /api/generations/video/[jobId]` checks for pending/unclaimed events for the job and claims/processes them.
-      3. Periodic Reconciliation Endpoint: `GET /api/cron/video-webhooks` (protected by `CRON_SECRET`), invoking `sweepStaleWebhookEvents()`, `processPendingWebhookBatch()`, and `reconcileStaleVideoJobs()`. Compatible with free external cron triggers (cron-job.org, GitHub Actions, Vercel Cron free tier) without requiring paid Redis/BullMQ/SQS infrastructure.
+      3. Periodic Reconciliation Endpoint: `GET /api/cron/video-webhooks` (protected by `CRON_SECRET`; fails closed in production when unset — §16.12), invoking `sweepStaleWebhookEvents()`, `processPendingWebhookBatch()`, and `reconcileStaleVideoJobs()`. Compatible with free external cron triggers (cron-job.org, GitHub Actions, Vercel Cron free tier) without requiring paid Redis/BullMQ/SQS infrastructure.
   - Test Suite (`scripts/test-fal-webhooks-orchestration.mts` / `npm run test:video-webhooks`):
     - 119 passing tests across Ed25519 signature verification, replay protection, adapter submission, queue polling, error normalization, secret redaction, durable persistence, Fast-ACK route handler, identity mismatch rejection, leased event claims, out-of-order deliveries, crash recovery, ambiguous submission handling, webhook recovery, stale sweeps, exponential backoff, batch worker processing, and cron reconciliation endpoint.
 - **Batch 4: Generation APIs & Client Synchronization Layer** (✅ Complete & Verified — 75 tests passing)
@@ -923,3 +924,279 @@ All Stage 8.2 deliverables and three focused reliability corrections have been e
 - **Next.js Production Build**: `npm run build` compiled and optimized all 23 app routes successfully.
 - **Git Diff & Formatting**: `git diff --check` clean (0 whitespace/formatting issues).
 - **Budget Constraint**: ₹0 expenditure maintained (no live Fal.ai calls, zero cloud mutations).
+
+## 16. Stage 9 — AI Video Clipper: Architecture, Feasibility & Operational Invariants
+
+### 1. Processing Infrastructure & Runtime Separation
+- **Runtime Decoupling**:
+  - **Local Development**: Runs in Node.js environment backed by `MockClipperEngine` (zero external dependencies, fast offline test execution) or optional local FFmpeg if present.
+  - **Production Runtime**: Requires a dedicated containerized worker process (e.g. Next.js standalone container runner or background task queue).
+  - **Serverless Limitation**: Next.js serverless request handlers (e.g. Lambda/Vercel with 10s–60s timeouts, no FFmpeg/Whisper binary runtimes, and constrained memory) **cannot execute long-running video clipping**. The HTTP layer acts solely as an ingestion ingress ticket issuer and status polling boundary.
+- **Engine Abstraction (`VideoClipperEngine`)**:
+  - `MockClipperEngine`: Deterministic, offline, fixture-driven engine for CI/CD and developer testing without system dependencies.
+  - `FfmpegClipperEngine`: Production worker engine utilizing external FFmpeg subprocess for metadata extraction, audio separation, scene detection, dynamic `.ass` subtitle rendering, and single-pass canvas transcoding.
+- **Operational Reality & Budget Discipline**:
+  - **Commercial video clipping cannot currently be reliably guaranteed at ₹0**. Sustained multi-minute 1080p video transcoding and local Whisper transcription require non-trivial CPU/RAM resources that exceed typical free-tier limits.
+  - All paid infrastructure, cloud GPUs, and paid transcription APIs remain strictly disabled.
+
+### 2. Source Video Retention & Cleanup Lifecycle
+- **Retention Invariant**: Raw source footage **must never be deleted after audio extraction**. Transcoding and framing candidate clips requires random frame access to the source video throughout rendering.
+- **Retention Span**: The source video is retained in ephemeral staging storage (`ephemeral/users/{userId}/uploads/{uploadId}.mp4`) until all requested clips have been rendered, validated, and permanently committed to `generated-assets`.
+- **Deletion Triggers**:
+  1. *On Success*: Immediately upon saving all rendered clips and thumbnails to permanent storage and committing database records, the ephemeral source object is deleted.
+  2. *On Terminal Failure*: The ephemeral source object is deleted (or scheduled for deletion) to prevent quota leakage.
+  3. *TTL Orphan Sweep*: An unreferenced or abandoned upload is automatically purged after a configurable TTL (e.g. 2 hours) via reconciliation cron.
+- **Observability & Failure Retries**: Deletion attempts are recorded in the job's settings audit trail. If a storage deletion fails due to a network glitch, it does not fail the generation; instead, the key is logged in `pending_cleanups` for retry during periodic reconciliation.
+
+### 3. Metadata Extraction (Non-Contiguous MP4 `moov` Parsing)
+- **Faststart & Non-Faststart Support**: The `moov` atom in MP4 files may reside at the beginning (faststart) or the end (standard recording).
+- **Two-Phase HTTP Range Strategy**:
+  1. *Head Range*: Inspect bytes 0–262,143 (first 256 KB). If `moov` is present, parse container dimensions, duration, and tracks directly.
+  2. *Tail Range*: If `moov` is not found in the head, issue a range request for the last 524,288 bytes (trailing 512 KB) where recording devices place the index.
+  3. *Bounded Download Fallback*: If `moov` is still unlocated, sequential streaming is capped at a strict safety ceiling (10 MB). Non-compliant files are deferred to local worker file inspection.
+- **Malformed & Atom-Bomb Protection**: Strict validation of box headers: reject box lengths exceeding remaining bytes, zero-length non-final boxes, circular offsets, and atoms exceeding 10 MB.
+
+### 4. Empirical Resource Benchmarks & Measurement Protocol
+- **Estimation Label**: All CPU, RAM, processing time, and output size numbers are theoretical estimates until empirically measured.
+- **Benchmark Protocol**:
+  - Test Fixtures: Standard 1080p H.264 @ 30 fps (5 Mbps bitrate, stereo AAC audio) at 60s and 180s durations.
+  - Metrics Recorded: Peak RSS memory (MB), CPU core utilization (%), Total end-to-end wall-clock time (s), Audio extraction latency (s), Whisper transcription latency (s), FFmpeg scene detection speed (x realtime), and Single-pass transcode time (s).
+
+### 5. Input Validation & Audio-Optional / Visual-Only Path
+- **Visual-Only Clipping Mode**: Videos lacking an audio track (timelapses, screen recordings, silent footage) are officially supported:
+  - Visual scene detection and frame motion heuristics operate without audio.
+  - Speech transcription and subtitle burning are cleanly bypassed (transcript `[]`, `burnSubtitles: false`).
+  - Audio normalization filters are omitted; output video contains no audio stream or a synthesized null track.
+  - UI and job status explicitly flag `visual_only: true`.
+- **Configurability**: All operational thresholds (`MAX_UPLOAD_SIZE_BYTES`, `MIN_SOURCE_DURATION_SECONDS`, `MAX_SOURCE_DURATION_SECONDS`, `MAX_CLIPS_PER_JOB`, `DEFAULT_CLIP_DURATION_SECONDS`) are resolved via domain configuration functions, preventing hardcoded limits.
+
+### 6. Storage Accounting, Quotas & Orphan Detection
+- **Storage Protection Invariant**: The 1 GB Supabase free storage quota is insufficient for uncontrolled commercial clipping.
+- **Upload Quotas**: Enforce strict per-user in-flight upload limits (maximum 1 concurrent upload / active job per user; maximum 200 MB temporary staging quota per user).
+- **Storage Accounting**: Monitor aggregate ephemeral storage bytes and permanent clip assets.
+- **Orphan Sweep**: Ephemeral uploads unlinked to a completed or active `GenerationJob` within 2 hours are flagged as orphans and deleted.
+- **Retryable Cleanup Queue**: Any transient failure to delete an ephemeral storage object is recorded in `pending_cleanups` and retried by the background worker.
+
+### 7. Stage 9 — Batch 1 Implementation Completed
+- **Domain Configuration (`src/features/clipper/config.ts`)**:
+  - Dynamic getters for file size, duration bounds, clip targets, credit pricing (`DEFAULT_CREDIT_COST_PER_CLIP = 5`), and daily quotas (`DEFAULT_DAILY_USER_CLIP_LIMIT = 2`).
+  - Supported aspect ratios: 9:16 (vertical), 1:1 (square), 16:9 (landscape).
+  - Framing modes: `pillarbox_blur` (default), `center_crop`, `fit`.
+  - Allowed MIME types: `video/mp4`, `video/quicktime`, `video/webm`.
+  - Storage TTLs: Ephemeral upload TTL = 7,200s (2h), Signed URL TTL = 600s (10m), Ephemeral staging quota = 200 MB per user.
+- **Memory-Safe VideoSource Abstraction (`src/features/clipper/source.ts`)**:
+  - Replaces raw memory buffering with `VideoSource` contract.
+  - `LocalFileVideoSource`: Direct access to worker disk paths with optional automatic cleanup on disposal.
+  - `StorageReferenceVideoSource`: Bounded streaming download into isolated scratch temp files, with strict `maxBytes` enforcement and explicit cleanup callbacks.
+- **Domain Types & Engine Contracts (`src/features/clipper/types.ts`)**:
+  - `VideoClipperEngine` interface operating over `VideoSource`: `extractMetadata()`, `detectScenes()`, `transcribeAudio()`, and `renderClip()`.
+  - Structured domain types: `VideoMetadata`, `SceneCut`, `TranscriptWord`, `TranscriptSegment`, `TranscriptResult`, `CandidateHighlight`, `ClipRenderRequest`, `ClipRenderResult`, `ClipperJobSettings`.
+- **Pure Input & Container Validation (`src/features/clipper/validation.ts`)**:
+  - `inspectContainerMagicBytes`: Binary header inspection for MP4 `ftyp` box and WebM EBML header.
+  - `validateUploadMimeType`, `validateUploadSizeBytes`.
+  - `validateSourceMetadata`: Enforces 15s–300s duration, 1080p resolution ceiling, and resolves visual-only mode when audio is absent.
+  - `validateClipWindow`: Validates 5s–60s clip duration, monotonicity, and total duration boundaries.
+  - `validateAspectRatio`, `validateFramingMode`, `validateIdentifier`.
+- **User-Isolated Storage Keys (`src/features/clipper/storage/keys.ts`)**:
+  - Path traversal defense via `SEGMENT_REGEX` (`/^[A-Za-z0-9_-]{8,64}$/`).
+  - Ephemeral uploads: `ephemeral/users/{userId}/uploads/{uploadId}.mp4`.
+  - Permanent clips: `users/{userId}/clips/{jobId}/{clipId}.mp4`.
+  - Poster thumbnails: `users/{userId}/clips/{jobId}/{clipId}-thumb.webp`.
+  - Strict ownership checkers (`isEphemeralUploadKeyOwnedBy`, `isClipKeyOwnedBy`, `isClipThumbnailKeyOwnedBy`, `isClipperKeyOwnedBy`).
+- **Deterministic Offline Mock Engine (`src/features/clipper/engine/mock-engine.ts`)**:
+  - Implements `VideoClipperEngine`.
+  - Returns deterministic 1080p metadata, 5 monotonic scene cuts, and word-level transcript segments.
+  - Explicitly handles visual-only / silent videos (`isVisualOnly: true`, empty transcript).
+  - Emits structural mock MP4 containers with explicit disclaimer: `isMockOutput: true` (not claimed as genuine re-encoded output).
+  - Enforces `VideoSource.materialize().cleanup()` in every operation.
+- **Batch 1 Test Suite (`scripts/test-clipper-batch1.mts` / `npm run test:clipper`)**:
+  - 43/43 tests passing offline with 0 network calls and 0 database access.
+
+### 8. Stage 9 — Batch 2 Implementation Completed
+- **Database Schema & Model Reusability**:
+  - Reuses existing Prisma `GenerationJob` model and `GenerationType.VIDEO_CLIP` enum value without schema mutations or DDL migrations.
+  - Reuses existing `GeneratedAsset` model with `AssetType.VIDEO` for multi-clip outputs.
+  - Reuses existing `CreditWallet` and `CreditTransaction` models for double-entry financial ledger accounting.
+  - Leverages existing PostgreSQL partial unique index `GenerationJob_one_active_per_user` on `("userId") WHERE "status" IN ('PENDING', 'PROCESSING')` across all types (`IMAGE`, `VIDEO`, `VIDEO_CLIP`) to enforce single active generation per user globally.
+- **Lifecycle State Machine (`src/features/clipper/lifecycle.ts`)**:
+  - `validateClipperRequestInput`: Validates untrusted client payloads, verifies storage key ownership, clamps clip counts to [1, 3], and disables subtitles in visual-only mode.
+  - `createClipperJob`: Atomically creates `PENDING` job and debits dynamic credit cost in a single ACID transaction with row-level locking (`SELECT FOR UPDATE`).
+  - `Dynamic Credit Accounting`: Derives credit cost dynamically from clip count (`DEFAULT_CREDIT_COST_PER_CLIP = 5` credits per clip: 1 clip = 5, 2 clips = 10, 3 clips = 15).
+  - `Idempotency Replay & Conflict Guard`: Idempotent replays return existing job record with matching parameters; mismatched payloads with identical idempotency key throw `IDEMPOTENCY_CONFLICT`.
+  - `Daily Quota Protection`: Enforces UTC-day quota (`DEFAULT_DAILY_USER_CLIP_LIMIT = 2`) via `countDailyClipJobs`.
+  - `Worker Lease Management`: Atomic lease acquisition (`claimClipperLease`) via `ingestionToken` with 5-minute lease expiry, and lease extension (`renewClipperLease`).
+  - `Guarded Multi-Clip Completion`: `completeClipperJobWithAssets` verifies lease token, finalizes credits (`chargedCredits = estimatedCredits`), inserts multiple `GeneratedAsset` records, and updates settings.
+  - `Atomic Ledger-Backed Refunds`: `failClipperJob` and `cancelClipperJob` refund debited credits atomically via `refundJobDebit()` using idempotent `job-refund:<jobId>` key.
+  - `Terminal State Guards`: Completed jobs cannot be refunded; failed or cancelled jobs cannot create assets.
+  - `Stale Job Reconciliation Sweep`: `reconcileStaleClipperJobs` detects stuck `PENDING` (> 5m) and expired `PROCESSING` leases (> 15m), transitioning them to `FAILED` with automatic refunds.
+  - `Decoupled Ephemeral Source Cleanup`: `recordClipperSourceCleanup` manages retryable pending cleanup records in `settings.pendingCleanups` and `settings.cleanupAudit` without financial side-effects.
+  - `Lease-Expiry Fencing Safeguard`: `completeClipperJobWithAssets` and `renewClipperLease` explicitly check `AND ("ingestionLeaseExpiresAt" IS NULL OR "ingestionLeaseExpiresAt" > now())` to block stale workers whose lease expired.
+- **Batch 2 Offline Test Suite (`scripts/test-clipper-lifecycle.mts` / `npm run test:clipper-lifecycle`)**:
+  - 25/25 tests passing offline across 12 requirement categories with 0 live database or network calls.
+
+### 9. Stage 9 — Batch 3 Implementation Completed
+- **Subprocess Runner & Security Boundaries (`src/features/clipper/analysis/runner.ts`)**:
+  - Direct `execFile` argument array execution strictly avoiding shell interpolation (command injection defense).
+  - Explicit protocol blocking (`assertSafeSubprocessArgs`): rejects `http://`, `https://`, `ftp://`, `smb://`, `rtmp://`, etc., preventing SSRF and arbitrary remote media resolution.
+  - Hard timeouts (15s probe, 60s processing) and bounded buffer caps (5 MB stdout/stderr) to defend against memory exhaustion DoS.
+  - Pluggable `MockProcessRunner` recording invocation history and supporting custom command overrides for offline testing.
+- **Video Metadata Extraction (`src/features/clipper/analysis/metadata.ts`)**:
+  - Executes `ffprobe -v quiet -print_format json -show_format -show_streams` via `ProcessRunner`.
+  - Invariant: Never assumes container metadata or `moov` atom is located in the first 256 KB.
+  - Fractional frame-rate calculation (`parseFpsFraction` for `24/1`, `30000/1001` -> 29.97, etc.).
+  - Visual-only detection: sets `hasAudio: false` and `audioCodec: null` when audio streams are absent.
+  - Validates output against domain boundaries (`validateSourceMetadata`).
+- **Audio Stream Extraction & Silence Detection (`src/features/clipper/analysis/audio.ts`)**:
+  - `extractAudioTrack`: Inspects metadata and cleanly bypasses visual-only videos (`{ hasAudio: false, audioPath: null }`) without running FFmpeg or throwing.
+  - Demuxes audio to 16kHz mono PCM WAV (`-vn -acodec pcm_s16le -ar 16000 -ac 1`).
+  - `detectAudioSilence`: Runs `silencedetect=noise=-30dB:d=0.5` and parses stderr for start/end/duration intervals.
+- **Visual Scene Cut Detection (`src/features/clipper/analysis/scene.ts`)**:
+  - Runs FFmpeg `select='gt(scene,0.3)',metadata=print:file=-` to detect visual transitions.
+  - Monotonic timestamp ordering, minimum duration de-bouncing (1.0s), and origin fallback (0.0s).
+- **Whisper Transcription Parser (`src/features/clipper/analysis/transcription.ts`)**:
+  - Multi-format ingestion: Whisper native JSON, WebVTT (`.vtt`), and SubRip (`.srt`).
+  - **Accuracy Safeguard**: Flags `hasWordLevelAlignment: false` on segments and `isInterpolated: true` on words when acoustic timestamps are absent. Does not falsely claim word-level precision for linearly estimated words.
+  - Visual-only handling: returns `{ segments: [], fullText: "", isVisualOnly: true }` without failing.
+- **Deterministic Highlight Scoring Engine (`src/features/clipper/analysis/highlight.ts`)**:
+  - Multi-factor heuristic: speech density curve (optimal 2.2–3.8 words/sec), hook detection in first 4s (questions, trigger keywords), dead-air penalties, and scene cut snapping.
+  - Visual-only video mode: scores based on visual scene pacing and transition density without requiring speech.
+  - Greedy non-overlapping selection: returns top requested clips with $\le 20\%$ temporal overlap.
+  - Re-indexes word timestamps relative to clip start (`startTime = 0s`).
+- **ASS & SRT Subtitle Generator (`src/features/clipper/subtitles/ass-generator.ts`)**:
+  - Generates ASS v4.00+ subtitles formatted for canvas resolution (`9:16`, `1:1`, `16:9`).
+  - Mobile-friendly chunking (3–5 words per subtitle dialogue).
+  - Karaoke word-timing tags (`{\k<centiseconds>}`) for short-form video engagement.
+  - **Security Safeguard**: Sanitizes text to strip curly braces `{}` and backslashes `\` to prevent ASS command injection.
+  - Generates standard SRT captions as fallback.
+- **Batch 3 Offline Test Suite (`scripts/test-clipper-batch3.mts` / `npm run test:clipper-analysis`)**:
+  - 34/34 tests passing offline across 7 categories with 0 live network calls and 0 database access.
+
+### 10. Stage 9 — Batch 4 Implementation Completed (Rendering Pipeline, Framing & Output Ingestion)
+
+**Verification honesty:** all rendering tests use a mocked `ProcessRunner`. FFmpeg/FFprobe are **not installed** on the development machine, so the 3 real-encode tests were **SKIPPED**. No real video has been rendered, no output quality has been inspected, and no performance figures exist.
+
+- **Filter graphs (`render/filter-graph.ts`, pure)** — one `-filter_complex` pass per clip, input `#0` only:
+  - `center_crop`: `scale=W:H:force_original_aspect_ratio=increase,crop=W:H`.
+  - `fit`: `scale=…:decrease:force_divisible_by=2,pad=W:H:(ow-iw)/2:(oh-ih)/2:black`.
+  - `pillarbox_blur`: `split` → background cover-scaled at 1/6 resolution (even dims), `boxblur`, upscaled → foreground fit-scaled → `overlay` centred.
+  - Then `fps=min(source,30)` → optional `subtitles=filename=subs.ass` → `format=yuv420p` → `[vout]`.
+  - Audio (only when present): `loudnorm=I=-14:TP=-1.5:LRA=11` (single-pass), 48 kHz stereo → `[aout]`. Visual-only sources get `-an` and never subtitles.
+  - Subtitle filename must match `^[A-Za-z0-9_-]{1,64}\.ass$`; no user text ever enters the graph.
+- **Argument builder (`render/args.ts`)** — execFile arrays only: `-nostdin -n` (never overwrite) `-hide_banner -loglevel error`, `-threads N` + `-filter_complex_threads N` (default 2, `CLIPPER_FFMPEG_THREADS`), `-protocol_whitelist file`, input seek `-ss`/`-t`, `libx264 veryfast crf 23 high yuv420p`, `-maxrate` derived so a 60 s clip fits `MAX_STORED_CLIP_BYTES` (30 MB), `-fs` hard output cap, `-map_metadata -1 -map_chapters -1 -sn -dn` (strips e.g. phone GPS metadata), `-movflags +faststart -f mp4`. Paths must be absolute, have no URL scheme and not start with `-`. The runner additionally blocks FFmpeg pseudo-protocols (`concat:`, `subfile:`, `data:`, `crypto:`, `cache:`, `async:`, `tee:`, `fd:`).
+- **Output validation (`render/validate-output.ts`)** — `fs.stat` size 1..limit, 12-byte `ftyp` signature read (extension not trusted), FFprobe: container includes `mp4`, exactly one H.264 stream, exact W×H, duration within ±0.5 s of requested, audio presence matches expectation (AAC).
+- **Poster frames (`render/thumbnail.ts`)** — FFmpeg extracts one PNG frame from the *rendered* clip (at 25% / ≤3 s) to the scratch dir; sharp converts file-to-file to WebP (q82, 540 px wide, ≤1 MB). The PNG is always removed.
+- **`FfmpegClipperEngine` (`engine/ffmpeg-engine.ts`)** — requires an injected runner and **refuses `MockProcessRunner`** unless `allowMockRunner` (tests). Reuses Batch 3 metadata/scene/audio modules. Transcription is never faked: without an injected `SpeechTranscriber` an audio source throws `TRANSCRIPTION_UNAVAILABLE`; visual-only returns an empty transcript. `renderClip` uses a private `mkdtemp` scratch dir, runs FFmpeg with `cwd` = scratch dir (bare subtitle filename, so no Windows filter-path escaping), render timeout default 10 min (`CLIPPER_RENDER_TIMEOUT_MS`, an unbenchmarked safety ceiling), returns **file paths + idempotent `cleanup()`, never buffers**, and removes the scratch dir on any failure. FFmpeg stderr/paths never reach user-visible messages.
+- **Runner** — `RunnerOptions.signal` (abort kills the subprocess → `PROCESS_ABORTED`), `windowsHide`, explicit `PROCESS_OUTPUT_LIMIT`. The global default runner is still the mock (Batch 3 behaviour); production code must inject `SystemProcessRunner` explicitly.
+- **Lease keeper (`worker/lease.ts`)** — heartbeat renewal every `leaseMs/3`; a rejected renewal, or failing renewals that outlive the last grant minus a 10% margin, marks the lease lost and **aborts the AbortSignal** (killing FFmpeg). `renewNow()` is a database-round-trip fencing checkpoint; in-memory ownership alone is never trusted.
+- **Worker (`worker/process-job.ts`, dependency-injected)** — `markStarted` → `claimLease` → materialize source **once** (storage sources downloaded once; analysis and every render use the local copy) → probe → highlights (pre-selected or `planClips` hook) → per clip: fence → render → validate → thumbnail → fence → **stream upload from disk with real `contentLength`** (key tracked before upload, since partial uploads may create objects) → final fence → `completeClipperJobWithAssets` → source cleanup → record cleanup outcomes.
+  - Mock/buffer engine output is refused (`ENGINE_OUTPUT_NOT_FILE`, `MOCK_OUTPUT_REFUSED`).
+  - Exactly `requestedClipsCount` clips are required (credits were debited for that count); fewer → `INSUFFICIENT_HIGHLIGHTS` failure + refund. Partial delivery/partial refunds are not supported.
+  - Failure before completion: delete this worker's uploads → `failClipperJobFenced` (refund) → source deleted only if **this** worker settled.
+  - Lease lost (heartbeat, fence or fenced-out completion): no settlement, no refund, **source preserved**; own uploaded objects deleted (their keys are unique and never registered).
+  - Ambiguous completion error: job state re-read; if COMPLETED with our keys → completed (nothing deleted); if rolled back → delete uploads, fenced fail; if unreadable → **delete nothing**, report `settlement_unknown`.
+  - User-visible failure reason is `Video clipping failed (<CODE>).` only.
+- **Lifecycle additions (`lifecycle.ts`)** — `failClipperJobFenced` (PROCESSING + matching token + unexpired lease; idempotent refund), `recordClipperCleanupResults` (row-locked `SELECT … FOR UPDATE` read-modify-write; failed keys added to `pendingCleanups`, successes removed, audit trail capped at 50; never touches status/credits), `getClipperJobCleanupState`. **Fix:** `createClipperJob` no longer schedules a `platform_asset` source (the user's own Stage 8 video) for deletion.
+- **Retry sweep (`retryClipperPendingCleanups`)** — terminal jobs only; deletes only the job's own ephemeral source upload or unregistered clip/thumbnail keys under `users/{userId}/clips/{jobId}/`; registered assets, other jobs' keys, foreign users' keys and platform assets are skipped. Not yet scheduled (Batch 5).
+- **Wiring (`worker/wiring.ts`, `server-only`)** — Prisma lifecycle + Supabase `putStream`/`delete`. Not re-exported from the index and not invoked anywhere yet.
+- **Tests** — `scripts/test-clipper-batch4.mts` (`npm run test:clipper-render`): 69 passed, 0 failed, **3 skipped (real FFmpeg)**. `test:clipper-lifecycle`: 31/31 (6 new Batch 4 tests for fenced failure, cleanup recording and platform-asset retention).
+- **Regression (2026-11-11)** — clipper batch1 43/43, lifecycle 31/31, analysis 34/34, video adapters 116/116, video lifecycle 70/70, operator CLI 74/74, `npx tsc --noEmit` clean, `npm run build` successful (worker code is not imported by any route yet, so the build does not exercise it).
+- **Known limitations / not verified**
+  - Real FFmpeg encode, libass subtitle rendering (font `Inter` may be absent → fontconfig fallback), `loudnorm` output and `libx264` availability in the target FFmpeg build — unverified.
+  - Supabase `putStream` with a Node `fs.ReadStream` has not been exercised against a live bucket.
+  - No job pickup/scheduling, worker process, cron for `retryClipperPendingCleanups`, or ephemeral-upload TTL sweep yet (Batch 5).
+  - Batch 3 analysis timeouts (30 s scene/audio) may be too short for 300 s sources on slow CPUs; untested.
+  - Process resource limits are thread caps + timeouts + `-fs` only; CPU/memory cgroup limits must come from the worker container.
+  - Lifecycle tests remain in-memory mocks; real PostgreSQL concurrency is unproven.
+
+### 11. Stage 9 — Batch 5 Implementation Completed (Upload Workflow, Job API, Worker Execution, Maintenance, Client Controller)
+
+**Owner decisions (2026-11-11):**
+- **A — scene & pacing clipping for all videos.** Clips are chosen from visual scene cuts plus acoustic silence detection only; original audio is preserved. Speech-based scoring and captions are **unavailable** until a real transcription engine is integrated. Nothing is transcribed or faked. The limitation is persisted on each job (`settings.analysis`) and returned by the API (`job.analysis = { highlightMode: "scene_pacing", speechAnalysis: "unavailable", captions: "unavailable", originalAudio: "preserved" }`). Requests asking for captions are rejected with `CAPTIONS_UNAVAILABLE`.
+- **Upload cap 50 MB by default** (`DEFAULT_MAX_UPLOAD_SIZE_BYTES`, override `CLIPPER_MAX_UPLOAD_BYTES`). Supabase Free officially caps individual files at 50 MB. **Staging must verify the project's actual bucket/global limit.**
+
+**Upload workflow (`uploads/uploads.ts`, `storage/adapter.ts`, `storage/supabase-clipper.ts`)** — the browser uploads directly to private storage; no video passes through Next.js.
+1. `POST /api/clipper/uploads` validates the declared MIME type and size, then under the per-user lock:
+   - lists `ephemeral/users/{userId}/uploads` and evaluates the quota (max 1 pending upload, 200 MB staging);
+   - writes an **empty placeholder** at the new random upload key;
+   - then issues a signed upload URL (upsert over the placeholder).
+2. The browser PUTs the file.
+3. `POST /api/clipper/uploads/complete` re-checks ownership, real size (1..cap), age (TTL 2 h minus 15 min margin) and the container signature (reads only the first 64 bytes via a Range request; the extension must match the container).
+4. `POST /api/clipper/uploads/discard` releases a pending upload (refused while an active job uses it).
+
+**Quota safety (mandatory safeguards):**
+- **Fail closed:** listing errors, timeouts (5 s per op), malformed pages, missing object sizes, unexpected sub-folders, or reaching the 20-object ceiling (completeness unprovable) all return `503 QUOTA_UNVERIFIABLE`. An incomplete or failed listing is never treated as zero usage.
+- **Concurrency:** check-and-reserve runs inside `withUserLock` (the same `SELECT … FROM "User" … FOR UPDATE` row lock as job creation). Because the placeholder is written inside the lock, any concurrent or later intent sees the reservation in its own listing. A placeholder counts as one pending upload reserving the full upload cap. Tests show 6 concurrent intents → exactly 1 succeeds, and a no-lock control shows the bypass the lock prevents.
+- Trade-off: the DB transaction is held across bounded storage calls (list + placeholder, each ≤5 s; tx timeout 20 s).
+
+**Clip job API (`jobs.ts`, `http.ts`, `job-view.ts`, `queries.ts`, `service.ts`)**
+- `POST /api/generations/clip` (requires `Idempotency-Key`): body `{ source: {type:"upload", uploadKey} | {type:"platform_asset", assetId}, aspectRatio, framing, clipCount, hints? }`. Validation is strict (unknown aspect or framing values and out-of-range clip counts are rejected, not defaulted).
+  - Upload sources are re-verified and must not have been used by any earlier job (`UPLOAD_ALREADY_USED`).
+  - Platform-asset sources must be the user's own COMPLETED Stage 8 VIDEO asset under `users/{userId}/videos/`. Note: Stage 8 videos are 5 s long, so they are currently always rejected by the 15 s minimum (`SOURCE_DURATION_OUT_OF_RANGE`).
+  - Client duration and dimensions are **hints only** (`settings.sourceMetadataOrigin = "client_hint"`); the worker's FFprobe result is authoritative and violations fail and refund.
+  - `burnSubtitles` is always false and `isVisualOnly` is decided by the worker.
+  - Idempotent replays are detected **before** source verification, because a finished job's upload is legitimately deleted.
+- `GET /api/generations/clip/[jobId]` returns status, credits, analysis limitations, public failure code and message, and the clips with 10-minute signed URLs. It never returns storage keys, cleanup data or internal errors. Signing failures degrade to `null` URLs.
+- All state-changing routes use the trusted Origin check, session auth, the process-local rate limit and the 16 KB JSON cap.
+
+**Worker execution (`worker/loop.ts`, `worker/plan-clips.ts`, `scripts/clipper-worker.mts`, `npm run clipper:worker`)**
+- Long-running Node process, not a request handler. It refuses to start unless `CLIPPER_WORKER_ENABLED=true` **and** ffmpeg and ffprobe are on PATH; both guards were smoke-tested.
+- Picks up PENDING VIDEO_CLIP jobs (oldest first), one at a time. Exclusivity comes from the atomic `markStarted` + lease claim; the two-worker race test confirms exactly one completes and the other reports `not_claimed`. Expired PROCESSING jobs are not resumed; reconciliation fails and refunds them.
+- The source is streamed once from a signed URL into bounded scratch storage (storage-js `download()` is avoided because it buffers a Blob).
+- Planner: `engine.detectScenes` plus acoustic `detectSilence` (audio sources only) feed `scoreCandidateHighlights` with an explicit `SPEECH_ANALYSIS_UNAVAILABLE` marker (empty transcript). Output words and transcript text are forced empty.
+- Shutdown: the first SIGINT/SIGTERM finishes the current job and exits. A second signal aborts FFmpeg via `LeaseKeeper.externalSignal`; the job is then settled `FAILED (WORKER_SHUTDOWN)` with a refund **under the still-valid lease**, and the source is cleaned up.
+- Unprocessable settings are skipped and left for reconciliation.
+
+**Maintenance (`maintenance.ts`, `GET /api/cron/clipper`)** — bounded, isolated phases:
+1. Stale jobs: `reconcileStaleClipperJobs` with a **30-minute queue-wait** threshold for unclaimed PENDING jobs, so a single busy worker does not cause mass failures.
+2. Cleanup retries for terminal jobs with `cleanupStatus` pending or failed (20 per run):
+   - an empty stale list is finalized to `cleaned`;
+   - ineligible keys, and keys that failed 10 times, are removed from retry and the job is marked `needs_review` (audited), so the sweep can never get stuck.
+3. Abandoned-upload sweep (≤50 user folders and ≤100 deletes per run): deletes only well-formed keys older than the 2 h TTL that no ACTIVE clip job references. Missing timestamps, listing or DB errors, and foreign or malformed keys are skipped, never deleted.
+- Cron auth uses `Authorization: Bearer $CRON_SECRET` with a timing-safe comparison and **fails closed in production when `CRON_SECRET` is unset**.
+- ~~Risk (Stage 8): `/api/cron/video-webhooks` failed *open* when `CRON_SECRET` was unset in production.~~ **Fixed 2026-11-11** — see §16.12.
+
+**Lifecycle changes:**
+- `completeClipperJobWithAssets` sets `cleanupStatus` to `cleaned` when nothing is scheduled (platform-asset source).
+- `recordClipperCleanupResults` gains `abandonKeys` (→ `needs_review`) and `finalize`.
+- `createClipperJob` accepts `extraSettings` (`sourceMetadataOrigin`, `sourceSizeBytes`, `analysis`).
+
+**Client controller (`src/features/clipper/client/`, browser-safe, no UI yet)**
+- `api.ts` (never throws), `upload.ts` (XHR PUT with progress and abort), `pending.ts` (localStorage key `yourai:clipper:pending:<userId>`, 10-minute replay window, 24-hour recovery window), and `controller.ts`, a state machine: idle → uploading → verifying → submitting → processing → completed | failed | expired.
+- The idempotency key is created once and persisted **before** the POST; ambiguous outcomes (network/5xx) retry with the same key.
+- `recover()` never creates a key. Definitive rejections and failed uploads release the upload reservation.
+
+**Tests (2026-11-11)**
+- `npm run test:clipper-api`: **73/73**.
+- `test:clipper-lifecycle`: 35/35 (+4).
+- Mutation checks confirmed the suite fails if the listing fails open (4 failures), the lock is bypassed (1), or the key is not persisted before the POST (1).
+- Regression: render 69/69 (3 real-FFmpeg skipped), batch1 43/43 (upload-cap assertion updated to 50 MB), analysis 34/34, video adapters 116/116, video lifecycle 70/70, operator CLI 74/74.
+- `npx tsc --noEmit` clean; `npm run build` passes with 29 routes (6 new); `git diff --check` clean.
+
+**Carried-forward validation items (not verified):**
+1. Real FFmpeg encoding and subtitle rendering (FFmpeg is absent locally).
+2. Supabase against a real bucket:
+   - signed upload URLs with upsert over a 0-byte placeholder (and whether 0-byte objects are accepted);
+   - `info()` sizes and timestamps, Range reads and streamed downloads;
+   - `list()` folder semantics;
+   - the browser PUT format for signed uploads;
+   - the project's per-object size limit.
+3. PostgreSQL concurrency (row lock + JSON-path queries) and a real worker run against a database.
+4. Transcription: none — audio-based (speech) clipping and captions remain unavailable.
+- **Hosting:** there is no free, reliable host for the long-running worker. At ₹0 it can only run on the owner's own machine.
+- The abandoned-upload sweep processes the first 50 user folders per run in name order (possible starvation at scale; acceptable for now).
+- The UI is Batch 6; `/video-clipper` is still the placeholder.
+
+### 16.12 Stage 8 security fix — video cron fails closed (2026-11-11, uncommitted, awaiting review)
+
+Batch 5 was accepted on 2026-11-11. Before the commit, the owner asked for this one Stage 8 security fix.
+
+- **Before:** `GET /api/cron/video-webhooks` checked the bearer only when `NODE_ENV=production` **and** `CRON_SECRET` was set, so a missing secret in production left it open.
+- **Now:** `src/features/video/cron-auth.ts` → `isVideoCronRequestAuthorized(request, env)`:
+  - **Production:** the secret must be configured (blank or whitespace counts as missing) and the request must send `Authorization: Bearer <secret>`, compared timing-safe. Otherwise the response is 401 before any database or storage work.
+  - **Outside production:** the endpoint stays open, as before, including when a secret is set.
+- The route now calls the helper; no other Stage 8 logic changed (video generation, accounting, migrations and storage are untouched).
+- **Tests:** `npm run test:video-cron-auth` (`scripts/test-video-cron-auth.mts`) passes **29/29**.
+  - It covers production with a missing or blank secret, a wrong, truncated or schemeless token, and the correct token, which reaches reconciliation (shown by a sentinel database stub). It also checks that development, `test` and an unset `NODE_ENV` stay open.
+  - Mutation check: restoring fail-open causes 9 failures.
+- **Regression:** video-webhooks 161, video-adapters 116, video-lifecycle 70, video-storage 116, video-api 103 and video-ui 74, all passing.
+- **Static checks:** `npx tsc --noEmit` is clean; `npm run build` passes; `git diff --check` is clean.

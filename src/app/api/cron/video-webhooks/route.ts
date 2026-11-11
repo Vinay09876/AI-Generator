@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic";
 
 import { getObjectStorage } from "@/features/generations/storage";
+import { isVideoCronRequestAuthorized } from "@/features/video/cron-auth";
 import { reconcileStaleVideoJobs } from "@/features/video/lifecycle";
 import { processPendingIngestionJobs } from "@/features/video/storage/ingestion";
 import type { SupabaseVideoObjectStorage } from "@/features/video/storage/supabase";
@@ -24,18 +25,13 @@ export interface VideoCronContext {
  *   3. Stale Job Reconciliation: Settles dead video jobs older than 15 minutes and refunds credits.
  *   4. Zero Paid Infrastructure: Invocable via standard Linux crontab, GitHub Actions scheduled workflow,
  *      or free webhook heartbeat (e.g. cron-job.org).
- *   5. Security: Enforces CRON_SECRET bearer token check in production.
+ *   5. Security: In production, requires a configured CRON_SECRET and a matching bearer token
+ *      (fails closed when the secret is missing). Open outside production for local development.
  */
 export async function handleVideoCronRequest(request: Request, context?: VideoCronContext) {
-  // Authorization check
-  const authHeader = request.headers.get("authorization");
-  const cronSecret = process.env.CRON_SECRET;
-
-  if (process.env.NODE_ENV === "production" && cronSecret) {
-    const bearer = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
-    if (bearer !== cronSecret) {
-      return Response.json({ error: "Unauthorized" }, { status: 401 });
-    }
+  // Authorization check — fails closed in production when CRON_SECRET is missing.
+  if (!isVideoCronRequestAuthorized(request, { CRON_SECRET: process.env.CRON_SECRET, NODE_ENV: process.env.NODE_ENV })) {
+    return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   try {
