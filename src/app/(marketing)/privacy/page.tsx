@@ -8,7 +8,7 @@ export const metadata: Metadata = {
 };
 
 export default function PrivacyPolicyPage() {
-  const lastUpdated = "November 10, 2026";
+  const lastUpdated = "November 11, 2026";
 
   return (
     <article className="mx-auto max-w-4xl px-4 py-16 sm:px-6 sm:py-24">
@@ -19,7 +19,7 @@ export default function PrivacyPolicyPage() {
         <h1 className="mt-4 font-display text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
           Privacy Policy
         </h1>
-        <p className="mt-2 text-sm text-muted">Last updated: {lastUpdated} • Version 1.0 (Pre-Release)</p>
+        <p className="mt-2 text-sm text-muted">Last updated: {lastUpdated} • Version 1.1 (Pre-Release)</p>
       </header>
 
       <div className="space-y-10 text-[15px] leading-relaxed text-muted">
@@ -27,7 +27,7 @@ export default function PrivacyPolicyPage() {
           <h2 className="text-xl font-semibold text-foreground">1. Introduction &amp; Scope</h2>
           <p>
             This Privacy Policy explains how {SITE.name} (&quot;we&quot;, &quot;our&quot;, or &quot;us&quot;) collects, uses,
-            stores, and safeguards your personal data when you interact with our website and generative AI services.
+            stores, and safeguards your personal data when you interact with our website and generative AI services (including AI Image Generation and AI Video Generation).
             We are committed to operating transparently, adhering to sound data protection principles, and disclosing the
             exact technical infrastructure powering the platform.
           </p>
@@ -43,19 +43,20 @@ export default function PrivacyPolicyPage() {
             </li>
             <li>
               <strong>Generative Prompts &amp; Parameters:</strong> When you submit a creative request, we store the text prompt,
-              chosen quality configuration (&quot;fast&quot; or &quot;detailed&quot;), timestamp, and client execution parameters.
+              chosen quality configuration (&quot;fast&quot; or &quot;detailed&quot; for images), aspect ratio selection (16:9, 9:16, 1:1 for video),
+              frame parameters, timestamp, and client execution parameters.
             </li>
             <li>
               <strong>Ledger &amp; Transaction Records:</strong> We maintain an immutable double-entry ledger recording all credit
               grants, authorizations, holds, debits, refunds, and balance states associated with your account.
             </li>
             <li>
-              <strong>Generated Assets:</strong> We store the raster image assets output by the inference engine and link their
-              private storage keys to your user record.
+              <strong>Generated Assets:</strong> We store the raster image assets (WebP) and synthesized video assets (H.264 MP4, WebP poster frame)
+              output by the inference engines and link their private storage keys to your user record.
             </li>
             <li>
-              <strong>Operational &amp; Network Metadata:</strong> For security, abuse prevention, and rate-limiting purposes, our
-              edge proxies and application handlers process HTTP request headers, browser user-agent strings, and client IP addresses.
+              <strong>Operational &amp; Network Metadata:</strong> For security, abuse prevention, rate-limiting, and webhook correlation purposes, our
+              edge proxies and application handlers process HTTP request headers, browser user-agent strings, client IP addresses, and provider webhook delivery identifiers.
             </li>
           </ul>
         </section>
@@ -102,31 +103,37 @@ export default function PrivacyPolicyPage() {
                 </tr>
                 <tr>
                   <td className="px-4 py-3 font-medium text-foreground">Cloudflare, Inc.</td>
-                  <td className="px-4 py-3">AI Model Inference (Workers AI FLUX.1 Schnell) &amp; Edge Security CDN</td>
+                  <td className="px-4 py-3">AI Image Model Inference (Workers AI FLUX.1 Schnell) &amp; Edge Security CDN</td>
                   <td className="px-4 py-3">Global Edge Network</td>
+                </tr>
+                <tr>
+                  <td className="px-4 py-3 font-medium text-foreground">Features Analytics Inc. (Fal.ai)</td>
+                  <td className="px-4 py-3">AI Video Model Inference (Alibaba Tongyi Wan 2.1 720p) &amp; Webhook Delivery</td>
+                  <td className="px-4 py-3">United States / Global Cloud</td>
                 </tr>
               </tbody>
             </table>
           </div>
           <p className="text-xs text-muted">
             Text prompts submitted for image generation are dispatched via encrypted HTTPS to Cloudflare Workers AI for neural inference.
-            Cloudflare does not use prompts submitted through its Workers AI platform to train base frontier models without customer consent.
+            Text prompts and video parameters submitted for video generation are dispatched via encrypted HTTPS to Fal.ai. Fal.ai returns completion notifications via asynchronous webhooks verified with Ed25519 signatures and HMAC-SHA256 correlation tokens.
+            Neither provider uses prompts submitted through our enterprise API configurations to train base frontier models without customer consent.
           </p>
         </section>
 
         <section className="space-y-3">
           <h2 className="text-xl font-semibold text-foreground">5. Private Asset Storage &amp; 10-Minute Signed URLs</h2>
           <p>
-            Protecting your generated imagery from unauthorized third-party access is a fundamental architectural commitment:
+            Protecting your generated imagery and video assets from unauthorized third-party access is a fundamental architectural commitment:
           </p>
           <ul className="list-disc space-y-2 pl-6">
             <li>
-              <strong>Private Object Storage:</strong> All generated image files are written to a strictly private bucket on Supabase Storage.
+              <strong>Private Object Storage:</strong> All generated image (WebP) and video (H.264 MP4, WebP thumbnail) files are written to a strictly private bucket on Supabase Storage.
               Direct unauthenticated HTTP access to the storage bucket is entirely disabled.
             </li>
             <li>
-              <strong>Time-Limited Signed URLs:</strong> To view or download an asset, your client makes an authenticated request to our
-              asset gateway. After verifying your session and confirming account ownership of the asset, the server issues a cryptographically
+              <strong>Time-Limited Signed URLs:</strong> To view, stream, or download an asset, your client makes an authenticated request to our
+              asset gateway. After verifying your session and confirming account ownership of the asset prefix (<code>users/{'{userId}'}/...</code>), the server issues a cryptographically
               signed HMAC URL with a strictly limited expiration time of 10 minutes (600 seconds). Once expired, the URL cannot be reused.
             </li>
           </ul>
@@ -136,12 +143,13 @@ export default function PrivacyPolicyPage() {
           <h2 className="text-xl font-semibold text-foreground">6. Data Retention &amp; Account Deletion Status</h2>
           <p>
             We retain account data and generation records for as long as your account exists to provide history, gallery access, and auditability.
+            The Service does not operate an automated deletion schedule for generated media files. Users should download assets they wish to keep permanently.
           </p>
           <div className="rounded-2xl border border-amber-300/20 bg-amber-400/[0.06] p-4 text-amber-100">
             <h3 className="text-sm font-semibold text-amber-200">Notice Regarding Account Deletion</h3>
             <p className="mt-1 text-xs leading-relaxed text-amber-200/80">
               Automated self-service account deletion is currently unsupported in software. The relational data schema maintains
-              strict transactional integrity across concurrent budget reservations, ledger credits, and generation jobs. Due to these
+              strict transactional integrity across concurrent budget reservations, ledger credits, generation jobs, and generated asset records. Due to these
               architectural dependencies, automated self-service account deletion is currently disabled. Manual deletion workflows and
               dedicated administrative closure channels will be established prior to public launch.
             </p>
@@ -152,8 +160,8 @@ export default function PrivacyPolicyPage() {
           <h2 className="text-xl font-semibold text-foreground">7. Security &amp; Data Safeguards</h2>
           <p>
             We employ industry-standard administrative, physical, and technical defenses, including TLS 1.3 transport encryption,
-            Content Security Policies (CSP), HTTP Strict Transport Security (HSTS), process-local burst rate limiting, and strictly
-            credentialed server boundaries.
+            Content Security Policies (CSP), HTTP Strict Transport Security (HSTS), process-local burst rate limiting, Ed25519 webhook signature validation,
+            DNS connection pinning against SSRF and rebinding attacks, and strictly credentialed server boundaries.
           </p>
         </section>
 

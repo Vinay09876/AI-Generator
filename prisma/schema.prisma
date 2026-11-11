@@ -147,8 +147,12 @@ model GenerationJob {
   createdAt        DateTime         @default(now())
   updatedAt        DateTime         @updatedAt
   /// Set when the provider request starts; used to detect stuck jobs.
-  startedAt        DateTime?
-  completedAt      DateTime?
+  startedAt               DateTime?
+  completedAt             DateTime?
+  /// Unique lease token claimed by an ingestion worker to stream and persist provider video output.
+  ingestionToken          String?
+  /// Expiration timestamp for the active ingestion lease; allows crash recovery after timeout.
+  ingestionLeaseExpiresAt DateTime?
 
   user               User                       @relation(fields: [userId], references: [id], onDelete: Cascade)
   assets             GeneratedAsset[]
@@ -162,22 +166,27 @@ model GenerationJob {
   @@unique([userId, idempotencyKey])
   @@index([userId, createdAt])
   @@index([status, createdAt])
+  @@index([status, ingestionLeaseExpiresAt])
 }
 
 model GeneratedAsset {
-  id         String    @id @default(cuid())
-  userId     String
-  jobId      String
-  type       AssetType
+  id              String    @id @default(cuid())
+  userId          String
+  jobId           String
+  type            AssetType
   /// Deprecated for private storage: use storageKey + short-lived signed URLs instead.
-  fileUrl    String?   @db.Text
+  fileUrl         String?   @db.Text
   /// Object key inside the private storage bucket, e.g. "users/{userId}/images/{jobId}/{assetId}.webp".
-  storageKey String
-  width      Int?
-  height     Int?
-  mimeType   String?
-  fileSize   BigInt?
-  createdAt  DateTime  @default(now())
+  storageKey      String
+  width           Int?
+  height          Int?
+  mimeType        String?
+  fileSize        BigInt?
+  /// Duration of video or audio asset in seconds. Null for static images.
+  durationSeconds Float?
+  /// Object key in private storage for video poster frame thumbnail (WebP). Null for static images.
+  thumbnailKey    String?
+  createdAt       DateTime  @default(now())
 
   user User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   job  GenerationJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
@@ -254,4 +263,35 @@ model ProviderBudgetReservation {
 
   @@index([budgetId, status])
   @@index([status, createdAt])
+}
+
+// ---------------------------------------------------------------------------
+// Durable Webhook Ingestion & Outbox Events (Stage 8)
+// Stores verified provider webhook payloads durably on disk/database before Fast-ACK.
+// Supports safe worker claiming, crash recovery, and idempotent duplicate handling.
+// ---------------------------------------------------------------------------
+
+enum WebhookEventStatus {
+  PENDING
+  PROCESSING
+  PROCESSED
+  FAILED
+}
+
+model ProviderWebhookEvent {
+  id              String             @id @default(cuid())
+  provider        String             // e.g. "fal-ai"
+  eventId         String             @unique // provider request_id or gateway event id
+  jobId           String?
+  payload         Json
+  status          WebhookEventStatus @default(PENDING)
+  processingToken String?
+  leaseExpiresAt  DateTime?
+  attempts        Int                @default(0)
+  lastError       String?            @db.Text
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  @@index([provider, status, leaseExpiresAt])
+  @@index([jobId])
 }

@@ -59,6 +59,7 @@ async function run() {
     assert.ok(csp.includes("base-uri 'self'"), "CSP must include base-uri 'self'");
     assert.ok(csp.includes("form-action 'self'"), "CSP must include form-action 'self'");
     assert.ok(csp.includes("https://*.supabase.co"), "CSP must include Supabase in img-src / connect-src");
+    assert.ok(csp.includes("media-src 'self' blob: data: https://*.supabase.co"), "CSP must include Supabase in media-src for video playback");
     assert.ok(csp.includes("https://fonts.googleapis.com"), "CSP must include Google Fonts in style-src");
     assert.ok(csp.includes("https://fonts.gstatic.com"), "CSP must include Google Fonts in font-src");
   });

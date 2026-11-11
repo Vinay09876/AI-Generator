@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { LEGAL_ROUTES, ROUTES, SITE } from "@/lib/constants";
 import { DAILY_USER_IMAGE_LIMIT, PROMPT_MAX_LENGTH } from "@/features/generations/config";
+import { DEFAULT_DAILY_USER_VIDEO_LIMIT } from "@/features/video/config";
 
 export const metadata: Metadata = {
   title: "Acceptable Use Policy",
@@ -9,7 +10,7 @@ export const metadata: Metadata = {
 };
 
 export default function AcceptableUsePolicyPage() {
-  const lastUpdated = "November 10, 2026";
+  const lastUpdated = "November 11, 2026";
 
   return (
     <article className="mx-auto max-w-4xl px-4 py-16 sm:px-6 sm:py-24">
@@ -20,7 +21,7 @@ export default function AcceptableUsePolicyPage() {
         <h1 className="mt-4 font-display text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
           Acceptable Use Policy
         </h1>
-        <p className="mt-2 text-sm text-muted">Last updated: {lastUpdated} • Version 1.0 (Pre-Release)</p>
+        <p className="mt-2 text-sm text-muted">Last updated: {lastUpdated} • Version 1.1 (Pre-Release)</p>
       </header>
 
       <div className="space-y-10 text-[15px] leading-relaxed text-muted">
@@ -28,8 +29,8 @@ export default function AcceptableUsePolicyPage() {
           <h2 className="text-xl font-semibold text-foreground">1. Purpose &amp; Core Principles</h2>
           <p>
             {SITE.name} is dedicated to providing creative generative tools while preventing harm, exploitation, and abuse.
-            This Acceptable Use Policy (&quot;AUP&quot;) defines the rules governing prompts, text submissions, generated assets,
-            and platform interaction across all services.
+            This Acceptable Use Policy (&quot;AUP&quot;) defines the rules governing prompts, text submissions, generated assets
+            (including raster images and synthesized videos), and platform interaction across all services.
           </p>
           <p>
             Your access to {SITE.name} is conditioned on strict compliance with this policy. We enforce a zero-tolerance approach
@@ -101,11 +102,11 @@ export default function AcceptableUsePolicyPage() {
             </li>
             <li>
               <strong>Circumventing Generation Quotas:</strong> Creating multiple accounts, rotating IP addresses, or exploiting
-              system vulnerabilities to evade the 10 jobs per day limit or the 1 active job concurrency lock.
+              system vulnerabilities to evade the daily limits ({DAILY_USER_IMAGE_LIMIT} images/day, {DEFAULT_DAILY_USER_VIDEO_LIMIT} video/day on promotional accounts) or the 1 active generation job concurrency lock.
             </li>
             <li>
-              <strong>Reverse Engineering &amp; Extraction:</strong> Attempting to probe, decompile, extract weights, or bypass
-              security headers and authentication tokens.
+              <strong>Reverse Engineering &amp; Extraction:</strong> Attempting to probe, decompile, extract weights, bypass
+              cryptographic webhook signatures, forge correlation tokens, or tamper with signed asset URLs.
             </li>
             <li>
               <strong>Payload Abuse:</strong> Crafting oversized, malformed, or hostile payloads exceeding the maximum prompt
@@ -125,18 +126,18 @@ export default function AcceptableUsePolicyPage() {
             <ul className="list-disc space-y-2 pl-6 text-sm">
               <li>
                 <strong>Input Validation &amp; Payload Boundaries:</strong> Strict server-side schema validation rejects requests
-                with empty prompts, prompts exceeding {PROMPT_MAX_LENGTH} characters, invalid step counts, non-UTF-8 characters,
+                with empty prompts, prompts exceeding {PROMPT_MAX_LENGTH} characters, unapproved aspect ratios, unsupported frame rates, non-UTF-8 characters,
                 or malformed JSON payloads.
               </li>
               <li>
                 <strong>Rate Limiting &amp; Concurrency Guards:</strong> Process-local sliding window rate limiters restrict submission
-                bursts, and PostgreSQL database locks enforce daily quotas ({DAILY_USER_IMAGE_LIMIT} jobs/day) and concurrency (maximum
-                1 active generation per user).
+                bursts, and PostgreSQL database locks enforce daily quotas and platform concurrency (maximum 1 active generation across image and video).
               </li>
               <li>
-                <strong>No Automated Pre-Inference Safety Filters:</strong> The generation pipeline dispatches prompts directly to the
-                underlying neural model without pre-inference natural language processing (NLP) content moderation, automated keyword blocks,
-                or computer-vision classifiers. Users remain solely responsible for the prompts submitted and the resulting outputs.
+                <strong>Provider AI Safety Checker (Video):</strong> Video generation requests submitted to Fal.ai enforce the provider-level AI safety checker (<code>enable_safety_checker: true</code>), which filters explicit, defamatory, or policy-violating prompts and outputs before delivery.
+              </li>
+              <li>
+                <strong>No Automated Pre-Inference NLP Filters (Image):</strong> Image generation dispatches prompts directly to FLUX.1 Schnell without pre-inference natural language processing (NLP) content moderation or automated keyword blocks. Users remain solely responsible for the prompts submitted and the resulting outputs.
               </li>
               <li>
                 <strong>Absence of Internal Moderation Tooling:</strong> The current software does not contain an administrative dashboard,

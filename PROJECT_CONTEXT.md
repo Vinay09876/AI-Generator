@@ -8,8 +8,8 @@
 
 **YourAI** is an AI creative SaaS, starting in India and expanding globally later. Three core tools:
 
-1. **AI Image Generator** — text → image, quality options, history, credits. *(building now)*
-2. **AI Video Generator** — future milestone.
+1. **AI Image Generator** — text → image, quality options, history, credits. *(completed in Stage 7)*
+2. **AI Video Generator** — text → video, 720p 5s, aspect ratios (16:9, 9:16, 1:1), Wan 2.1 via Fal.ai / Mock adapter, credits, history. *(building now — Stage 8)*
 3. **AI Video Clipper** — future milestone (upload → process → export short clips).
 
 Then: monetisation (credit purchases, subscriptions, payments). Monetisation comes **after** the core product works reliably.
@@ -18,7 +18,7 @@ Then: monetisation (credit purchases, subscriptions, payments). Monetisation com
 
 ## 2. Status (update as stages complete)
 
-AI Image Generator — 7-stage roadmap:
+AI Image & Video Generator roadmap:
 
 | # | Stage | Status |
 |---|---|---|
@@ -28,11 +28,14 @@ AI Image Generator — 7-stage roadmap:
 | 4 | Cloudflare provider adapter + Supabase Storage adapter (119 mocked tests) | ✅ Done — commit `218239a` |
 | 5 | Generation APIs, job processing, recovery | ✅ Implementation complete — offline API tests 161/161, adapter tests 119/119, DB integration tests 28/28, accounting tests 65/65 (dedicated test DB; all test records cleaned up), TypeScript check passed, `next build` passed. Commit `68d7bc7` (pushed). |
 | 6 | `/ai-image` UI | ✅ Implemented (B1–B6) and **real-generation-tested** (one Fast E2E generation on production, 2026-11-09 — see below). Reload-during-processing recovery **unverified** with a real job. Commit `23cad50` (pushed). |
-| 7 | Final testing + release readiness | ✅ Done — Batch 1 (Next.js standalone output, Dockerfile, .dockerignore, .env.example audit, /api/health probes) complete. Batch 2 (Hardened Disaster Recovery & Operational Tooling: YOURAI_ENC_V3 chunk-framed streaming authenticated encryption, PBKDF2/HKDF key hierarchy, two-pass streaming DB restore, per-object safe storage reconciliation, coordinated backup sets, 65 DR tests) complete. Batch 3 (Release Hardening, Legal Policies & Final Regression): Sub-Batch 3A (HTTP security headers, strict CSP, centralized lazy Zod env validation, bounded process-local sliding window rate limiting, safe client IP trust boundary, dual liveness/readiness health probes) complete; Sub-Batch 3B (Grounded legal pages /terms, /privacy, /acceptable-use, footer/registration/composer UX discoverability, explicit disclosures of unsupported self-service deletion and India draft status, zero unbuilt moderation tooling invariants, 15 legal tests) complete; Sub-Batch 3C (Complete 760-test regression across all 12 suites, Prisma generate, TypeScript check, Next.js production build, DR documentation, Release Readiness Checklist) complete. |
+| 7 | Final testing + release readiness | ✅ Done — Batch 1 (Next.js standalone output, Dockerfile, .dockerignore, .env.example audit, /api/health probes) complete. Batch 2 (Hardened Disaster Recovery & Operational Tooling: YOURAI_ENC_V3 chunk-framed streaming authenticated encryption, PBKDF2/HKDF key hierarchy, two-pass streaming DB restore, per-object safe storage reconciliation, coordinated backup sets, 65 DR tests) complete. Batch 3 (Release Hardening, Legal Policies & Final Regression): Sub-Batch 3A (HTTP security headers, strict CSP, centralized lazy Zod env validation, bounded process-local sliding window rate limiting, safe client IP trust boundary, dual liveness/readiness health probes) complete; Sub-Batch 3B (Grounded legal pages /terms, /privacy, /acceptable-use, footer/registration/composer UX discoverability, explicit disclosures of unsupported self-service deletion and India draft status, zero unbuilt moderation tooling invariants, 15 legal tests) complete; Sub-Batch 3C (Complete 760-test regression across all 12 suites, Prisma generate, TypeScript check, Next.js production build, DR documentation, Release Readiness Checklist) complete. Commit `d681411` (pushed). |
+| 8 | AI Video Generator | ✅ Complete — Batch 0 (Feasibility & Architecture) complete; Batch 1 (Domain config, pricing, types, MockVideoProvider, MP4 fixture & Ed25519 webhook boundary; 83 tests) complete; Batch 2A (DB schema, migrations & lifecycle state machine; 70 tests) complete; Batch 2B (Streaming storage ingestion, SSRF IP pinning, thumbnail boundary & signed URLs; 116 tests) complete; Batch 3 (Fal.ai provider adapter, Ed25519 webhook verification, durable persistence, concurrency-safe leases, cron reconciliation & 15m timeout sweep; 161 tests) complete; Batch 4 (Generation APIs & client synchronization layer, including cryptographically bound delayed webhook correlation token verification; 103 tests) complete; Batch 5 (Premium AI Video Generator UI at `/ai-video`, cinematic player, gallery & component tests; 74 tests) complete; Batch 6 (Legal Policy Reconciliation, UI Review, Full Regression & Release Readiness; 20 legal tests, 1,027 total offline regression tests passing) complete. Live Fal.ai E2E trial deferred pending explicit authorization. |
+| 8.1 | Staging Readiness Assessment | ✅ Complete — Comprehensive staging readiness audit across secrets, migrations, Supabase storage, Fal.ai ingress, cron scheduling, operator tooling, diagnostics, offline/live test boundaries, and 7-phase staging setup checklist. |
+| 8.2 | Zero-Cost Operational Preparation | ✅ Complete — Production Operator CLI (`scripts/resolve-ambiguous-job.mts`) with physical storage verification, Account Deletion SOP (`docs/runbooks/account-deletion-sop.md`), Staging Runbook (`docs/runbooks/staging-setup-runbook.md`), 74 CLI safety tests, 1,196 passing offline tests across 15 suites. |
 
 ## 3. Tech stack
 
-Next.js 16 (App Router) · React 19 · TypeScript · Tailwind CSS v4 · Motion · PostgreSQL on Supabase · Prisma 7 (`prisma.config.ts`, client generated to `src/generated/prisma`, `@prisma/adapter-pg`) · Auth.js v5 (Credentials, JWT sessions) · bcryptjs · zod · Cloudflare Workers AI (FLUX.1 Schnell, implemented) · Supabase Storage (private bucket, implemented) · sharp (JPEG → WebP).
+Next.js 16 (App Router) · React 19 · TypeScript · Tailwind CSS v4 · Motion · PostgreSQL on Supabase · Prisma 7 (`prisma.config.ts`, client generated to `src/generated/prisma`, `@prisma/adapter-pg`) · Auth.js v5 (Credentials, JWT sessions) · bcryptjs · zod · Cloudflare Workers AI (FLUX.1 Schnell, implemented) · Supabase Storage (private bucket, implemented) · sharp (JPEG → WebP) · Fal.ai (Wan 2.1 720p/5s text-to-video target), Mock Video Provider adapter, asynchronous webhook-first lifecycle with atomic ingestion lease & polling fallback, streamed MP4 ingestion to private Supabase Storage.
 
 Next.js 16 uses `src/proxy.ts` (formerly middleware). Repo: `github.com/Vinay09876/AI-Generator`, branch `master`.
 
@@ -41,17 +44,27 @@ Next.js 16 uses `src/proxy.ts` (formerly middleware). Repo: `github.com/Vinay098
 **Credits (user-facing)**
 - New account: **100 credits** (+ `INITIAL_GRANT` ledger row), created atomically with the user.
 - Fast image: **1 credit**, 4 steps. Detailed image: **2 credits**, 8 steps.
+- Video: Configurable via `VIDEO_CREDIT_COST` (proposed **10 credits** per 5-second 720p video, 24 fps).
 - Ledger sign: positive = added, negative = deducted. Wallet balance can never be negative (DB `CHECK`).
 
-**Provider capacity (Neurons) — separate from credits**
+**Limits**
+- Max **10 counted image generations per user per UTC day**.
+- Max **1 counted video generation per user per UTC day** for promotional accounts (`DEFAULT_DAILY_USER_VIDEO_LIMIT = 1`). In production during Stage 8, video generation is restricted to authorized QA accounts (`STAGE_8_QA_USER_EMAILS`). Quotas and pricing remain configurable via `getDailyUserVideoLimit()` and `getVideoCreditCost()`.
+- Shared platform concurrency limit: max **1 active generation job per user across all types** (enforced by PostgreSQL partial unique index `GenerationJob_one_active_per_user`).
+- A job counts when its provider reservation is `RESERVED` or `CONSUMED` (provider may have run / did run — even if later refunded). `RELEASED` (provider definitely never ran) does not count.
+
+**AI Video Generator rules (Stage 8)**
+- Provider: **Fal.ai hosting Wan 2.1** (720p, Apache 2.0 open-weights, commercial use permitted). Local development and test suite backed by offline `MockVideoProvider`.
+- Asynchronous lifecycle: `POST /api/generations/video` returns HTTP 202 `PROCESSING` immediately; provider calls `POST /api/webhooks/video/fal` with Fast ACK (HTTP 200) after durable result recording; streaming ingestion acquired via atomic database lease (`ingestionToken` + 5-min expiration); client read-only polling `GET /api/generations/video/{jobId}` (4s interval) serves as status sync and lease-recovery fallback.
+- Timing: Provider timeout 120s; stale `PROCESSING` reconciliation window **15 minutes**.
+- Storage: Private Supabase Storage bucket `generated-assets`, keys `users/{userId}/videos/{jobId}/{assetId}.mp4`, max 35MB, 10-minute signed URLs. Poster frame WebP stored at `thumbnailKey`.
+- Invariants: Pre-allocation debit (-credits) on submit; automatic refund (+credits) on upstream rejection, provider failure, or timeout reconciliation; single-transaction guarded completion `WHERE id = :id AND ingestionToken = :token`.
+
+**Provider capacity (Neurons) — separate from credits (Image Generator)**
 - Model `@cf/black-forest-labs/flux-1-schnell`, REST `POST https://api.cloudflare.com/client/v4/accounts/{ACCOUNT_ID}/ai/run/@cf/black-forest-labs/flux-1-schnell`, server-side bearer token.
 - Free allocation 10,000 Neurons/day, resets **00:00 UTC**. App budget **9,500 Neurons/UTC day** (500 margin).
 - Stored as centi-neurons: Fast **17,280**, Detailed **32,640**, daily limit **950,000**.
 - Actual usage comes from the `cf-ai-neurons` response header.
-
-**Limits**
-- Max **10 counted image generations per user per UTC day**; max **1 active job per user** (DB partial unique index).
-- A job counts when its provider reservation is `RESERVED` or `CONSUMED` (provider may have run / did run — even if later refunded). `RELEASED` (provider definitely never ran) does not count.
 
 **Accounting invariants**
 - Job creation + credit debit + Neuron reservation happen in **one** DB transaction.
@@ -112,6 +125,14 @@ Next.js 16 uses `src/proxy.ts` (formerly middleware). Repo: `github.com/Vinay098
 | Client generation logic (framework-free, DI) | `src/features/generations/client/` — `api.ts` (typed fetch, never throws), `pending-request.ts` (localStorage, key created only on submit), `polling.ts` (pure decisions), `generation-controller.ts` (state machine + recovery), `recovery-scheduler.ts` (Strict-Mode-safe), `gallery.ts`, `download.ts` |
 | Stage 6 tests | `npm run test:ui-logic` · `test:ui-flow` · `test:ui-recovery` · `test:ui-gallery` (all offline) · `test:queries` (TEST_DATABASE_URL only) |
 | Stage 5 tests | `scripts/test-generation-api.mts` (`npm run test:api`, offline) · `scripts/test-generation-integration.mts` (`npm run test:integration`, TEST_DATABASE_URL only) |
+| Video config & pricing | `src/features/video/config.ts` (pricing, aspect ratios, durations) |
+| Video types & interfaces | `src/features/video/types.ts` (VideoProviderAdapter, webhook types, job payloads) |
+| Video provider adapters | `src/features/video/providers/` (`adapter.ts`, `mock-provider.ts`, `fal-provider.ts`) |
+| Video lifecycle & lease | `src/features/video/lifecycle.ts` (atomic ingestion token lease, guarded completion, timeouts) |
+| Video HTTP handlers & DI | `src/features/video/http.ts`, `src/features/video/service.ts` |
+| Video API routes | `src/app/api/generations/video/route.ts` (POST async submit), `src/app/api/generations/video/[jobId]/route.ts` (GET status sync), `src/app/api/webhooks/video/fal/route.ts` (POST Fast-ACK webhook) |
+| Video UI (client) | `src/components/video-generator/` · `src/app/(dashboard)/ai-video/page.tsx` |
+| Video adapter test suite | `scripts/test-video-adapters.mts` (`npm run test:video-adapters`, offline) |
 
 Provider error outcomes drive Stage 5 settlement: `not_run` → `failJobProviderNotRun`; `ran` → `recordProviderSuccess(usage ?? null)` + `failJobAfterProviderSuccess`; `unknown` → `markProviderOutcomeUnknown` (reconcile later). Missing/invalid usage is `null` → charge the reserved amount, never zero.
 
@@ -470,3 +491,435 @@ All policies strictly reflect actual architecture, verified pricing, actual data
 4. **India Governing Law & Dispute Resolution Draft Status:** Preliminary draft terms designate India as the governing jurisdiction. Territorial venue, judicial forum, and dispute resolution mechanisms are provisional and require review and formalization by qualified legal counsel once the operating corporate entity and registered seat are finalized.
 5. **Production Deployment & Network Ingress Boundary:** The application has not yet been hosted or deployed to production infrastructure. The trusted proxy boundary (`TRUST_PROXY=cloudflare`) cannot be enabled until network ingress (e.g. Cloudflare Tunnel or Authenticated Origin Pulls) is configured to block direct client access to the origin server.
 6. **Multi-Instance Abuse Prevention:** Process-local rate limiting does not synchronize across horizontal server replicas or serverless instances. Multi-instance rate limiting (e.g., Redis or Cloudflare WAF rate limiting) must be evaluated if scaling horizontally.
+
+## 13. Stage 8 — AI Video Generator: Architecture & Batch Plan
+
+### 1. Architectural Blueprint & Technical Invariants
+- **Provider Choice:** Fal.ai hosting Alibaba Wan 2.1 (`fal-ai/wan/v2.1/t2v-720p`, Apache 2.0 open-weights, commercial rights permitted).
+- **Zero-Budget Strategy:** 100% of domain logic, state machines, webhook handlers, ingestion leases, storage streams, and UI flows are implemented and tested offline using a deterministic `MockVideoProvider` with an embedded fixture MP4. Exactly one real E2E generation is performed using developer trial credits during Batch 5.
+- **Asynchronous Webhook-First Lifecycle & Fast-ACK (<200ms):**
+  - Webhook endpoint (`POST /api/webhooks/video/fal`) verifies provider ED25519 signature via public JWKS.
+  - Webhook performs **Fast ACK (<200ms)**: writes provider result payload into `GenerationJob.settings.providerResult` and immediately returns HTTP 200 to prevent provider retry storms.
+  - Large MP4 asset streaming ingestion (5–25MB) is decoupled from the webhook response.
+- **Atomic Ingestion Claim & Crash Recovery:**
+  - Prevents race conditions between webhook handlers and client polling.
+  - Ingestion lease acquired via atomic conditional update:
+    ```sql
+    UPDATE "GenerationJob"
+    SET "ingestionToken" = :token,
+        "ingestionLeaseExpiresAt" = now() + interval '5 minutes'
+    WHERE id = :id
+      AND status = 'PROCESSING'
+      AND ("ingestionToken" IS NULL OR "ingestionLeaseExpiresAt" < now())
+    RETURNING id;
+    ```
+  - Exactly one execution path streams the video from the provider CDN directly to private Supabase Storage (`users/{userId}/videos/{jobId}/{assetId}.mp4`).
+  - Terminal settlement (`completeVideoJobWithAsset`) is guarded: `WHERE id = :id AND "ingestionToken" = :token`.
+  - If a worker crashes mid-ingestion, the 5-minute lease expires, allowing client polling or a sweep trigger to reclaim and complete ingestion.
+- **Client Polling Fallback:**
+  - Client polls `GET /api/generations/video/{jobId}` every 4 seconds.
+  - If the job is marked complete, returns asset metadata and signed URL immediately.
+  - If provider results exist but ingestion hasn't occurred (e.g. lost worker or webhook delivery failure), polling triggers the ingestion lease acquisition.
+  - Best-effort stale job sweep (15-minute reconciliation window) auto-refunds dead jobs.
+- **Credit Accounting & Financial Exposure Model:**
+  - Configurable `VIDEO_CREDIT_COST = 10` credits per 5-second 720p video (provider cost ~$0.30 at $0.06/sec).
+  - Pre-allocation debit (-10 credits) on job creation.
+  - Automatic refund (+10 credits) on upstream failure or timeout reconciliation.
+  - Concurrency protected by the existing global partial unique index `GenerationJob_one_active_per_user` across all generation types.
+  - Daily limit: 1 video generation per user per UTC day for promotional accounts (`DEFAULT_DAILY_USER_VIDEO_LIMIT = 1`). Restricted to authorized QA accounts via server-side environment configuration (`STAGE_8_QA_ALLOWLIST`) in production during Stage 8. Quotas remain configurable via `getDailyUserVideoLimit()`.
+  - Authoritative Entitlement & Server-Side Security Model (`src/features/video/auth.ts`):
+    - Server-side authorization check exclusively (`isServerAuthorizedQaUser`).
+    - Prefers stable user IDs (`user.id`) from authenticated session.
+    - If email is matched, requires normalized lowercase matching AND confirmed email identity (`emailVerified` is truthy); unverified emails fail closed.
+    - Production strictly fails closed: if `STAGE_8_QA_ALLOWLIST` is missing, empty, or whitespace, video generation access is denied to all accounts.
+    - Server exclusively resolves entitlements (`resolveUserVideoEntitlement`); untrusted client payloads (e.g. `{ tier: "paid", isQa: true }`) are strictly ignored.
+    - Paid tier quota (provisional 50/day) is granted strictly when trusted active subscription records exist; absent payment infrastructure, fails closed.
+    - Unknown or unrecognized tiers fail closed to promotional (1 video/day).
+    - QA allowlist values are never bundled to client-side code or exposed in API responses.
+- **Storage & Bandwidth Controls:**
+  - Private Supabase Storage bucket `generated-assets`.
+  - Streamed direct upload with a 35MB size limit.
+  - Thumbnail poster frame (`thumbnailKey`) generated and stored as WebP (~40KB) to protect Supabase 5GB/month egress bandwidth in gallery views.
+
+### 2. Stage 8 Implementation Batch Sequence
+- **Batch 0: Provider Feasibility & Architecture** (✅ Approved & Documented)
+- **Batch 1: Video Domain Config, Pricing, Types, Mock Adapter & Entitlement Security** (✅ Complete — 116 tests passing)
+  - `src/features/video/config.ts`: Aspect ratios (`16:9`, `9:16`, `1:1`), duration (`5s`), resolution (`720p`), fps (`24fps`), default credit pricing (`DEFAULT_VIDEO_CREDIT_COST = 10` via configurable `getVideoCreditCost()`), promotional daily quota (`DEFAULT_DAILY_USER_VIDEO_LIMIT = 1`), configurable tier limits via `getDailyUserVideoLimit()` (provisional QA: 10, paid: 50, unknown/unrecognized: fails closed to 1), limits (35MB MP4, 1MB WebP thumbnail), timing invariants (120s provider timeout < 300s lease < 900s reconciliation).
+  - `src/features/video/auth.ts`: Server-side QA authorization and entitlement resolution (`isServerAuthorizedQaUser`, `resolveUserVideoEntitlement`, `canGenerateVideoInStage8`, `parseQaAllowlist`):
+    - Server environment variable `STAGE_8_QA_ALLOWLIST` (deliberately not hardcoded in source).
+    - Prefers stable user IDs (`user.id`); checks normalized lowercase emails strictly when `emailVerified` is truthy.
+    - Production fail-closed protection: if allowlist is absent or empty, denies video generation access.
+    - Disregards untrusted client payloads (`clientPayload`) to prevent privilege elevation.
+    - Requires trusted active subscription data for paid tier; unknown tiers fail closed to promotional (1).
+    - Zero exposure of allowlist values in client bundles or responses.
+  - `src/features/video/types.ts`: Provider contract `VideoProviderAdapter`, `VideoGenerationRequest`, `VideoSubmitResult`, `CompletedVideoMetadata`, `VideoJobStatusResult`, `VideoCancelResult`, `VideoProviderError` (with `toLog()` secret redaction).
+  - `src/features/video/providers/fixture.ts`: Dual-fixture architecture:
+    - **Structural Container Fixture** (`MOCK_MP4_STRUCTURAL_FIXTURE_BUFFER` / `MOCK_MP4_FIXTURE_BUFFER`, 631 bytes): Syntactically valid ISOBMFF container conforming to ISO/IEC 14496-12/14 (`ftyp`, `moov`, `mdat`). Defines track metadata (1280x720, 5s), but lacks H.264 `avcC` parameter sets and encoded macroblocks (not decodable by video decoders). Retained for fast, ultra-compact unit tests and container parser validation.
+    - **Playable H.264 Video Fixture** (`MOCK_MP4_PLAYABLE_FIXTURE_BUFFER`, 19,190 bytes): Genuinely decodable and playable H.264 video container (Baseline Profile Level 1.0, SQCIF 128x96, 1.0s at 1000 timescale). Contains authentic `avcC` box with SPS/PPS parameter sets, chunk offsets, and uncompressed `I_PCM` IDR slice in `mdat`. Fully decodable and playable in HTML5 `<video>`, Chromium, and Windows Media Foundation.
+    - `inspectMp4Buffer` parser inspecting atom boxes, validating container structure and verifying `isPlayableH264` via `avcC` detection.
+  - `src/features/video/providers/mock-provider.ts`: Offline deterministic `MockVideoProvider` implementing `VideoProviderAdapter` with state progression (PENDING → PROCESSING → COMPLETED), idempotent checks, `[mock:slow]`, `[mock:fail:*]` triggers, cancellation, and dual fixture support (`[mock:playable]` / `fixtureMode: "playable"` delivering genuine H.264 video).
+  - `src/features/video/webhooks/verify.ts`: Provider-independent ED25519 webhook signature verifier (`verifyEd25519WebhookSignature`) with replay attack prevention, 5-minute timestamp tolerance, clock skew protection, and local test keypair generation.
+  - `scripts/test-video-adapters.mts`: Offline test suite (`npm run test:video-adapters`) with 116/116 tests passing across 7 categories.
+- **Batch 2A: Database Schema, Lifecycle State Machine & Credit Accounting** (✅ Complete — 70 tests passing)
+  - Additive Schema Migrations (`prisma/migrations/20261111083000_add_video_generation_fields/migration.sql`):
+    - `GenerationJob.ingestionToken` (Text?, nullable): Unique token claimed by an ingestion worker to stream video output.
+    - `GenerationJob.ingestionLeaseExpiresAt` (DateTime?, nullable): Expiration timestamp for the active ingestion lease; enables worker crash recovery.
+    - `GeneratedAsset.durationSeconds` (Float?, nullable): Duration of video or audio asset in seconds.
+    - `GeneratedAsset.thumbnailKey` (String?, nullable): Private storage key for the video poster frame thumbnail (WebP).
+    - `GenerationJob_status_ingestionLeaseExpiresAt_idx` composite index for $O(1)$ query performance during reconciliation sweeps.
+    - Data integrity check constraints:
+      - `GenerationJob_ingestion_lease_consistency`: `CHECK (("ingestionToken" IS NULL AND "ingestionLeaseExpiresAt" IS NULL) OR ("ingestionToken" IS NOT NULL AND "ingestionLeaseExpiresAt" IS NOT NULL))` strictly enforces the two valid states, preventing unreclaimable leases (token without expiry) or orphaned expiries.
+      - `GeneratedAsset_duration_positive`: `CHECK ("durationSeconds" IS NULL OR "durationSeconds" > 0)`
+    - Concurrency preservation: Verified that the existing partial unique index `GenerationJob_one_active_per_user` on `("userId") WHERE status IN ('PENDING', 'PROCESSING')` is unpartitioned by `type`, enforcing a strict platform-wide maximum of 1 active generation per user across both image and video requests.
+  - Video Generation Lifecycle State Machine (`src/features/video/lifecycle.ts`):
+    - `validateVideoRequestInput`: Enforces prompt limits (1..2048 chars), supported aspect ratios (`16:9`, `9:16`, `1:1`), durations (5s), resolutions (720p), fps (24fps), and non-empty idempotency keys.
+    - `createVideoJob`: Serializes user requests (`FOR UPDATE`), checks idempotency replays (returns existing job or raises `IDEMPOTENCY_CONFLICT`), checks daily quota (1 for promotional, 10 for QA, 50 for paid), enforces 1 active generation concurrency, creates `PENDING` job, and debits user wallet in ONE transaction. Supports dynamic, non-hardcoded credit pricing.
+    - `markVideoJobStarted`: Guarded `PENDING -> PROCESSING` transition upon upstream submission; records provider job ID and `startedAt`.
+    - `recordVideoProviderResult`: Atomically records provider output payload in `settings.providerResult`, enabling Fast-ACK (<200ms) for webhooks without blocking on heavy video streaming.
+    - `claimVideoIngestionLease`: Atomic conditional `UPDATE ... SET ingestionToken = :token, ingestionLeaseExpiresAt = now() + 5m WHERE id = :id AND status = 'PROCESSING' AND (ingestionToken IS NULL OR ingestionLeaseExpiresAt < now())`. Exactly one winner acquires the lease; concurrent workers are rejected; crashed workers can be reclaimed once expired.
+    - `completeVideoJobWithAsset`: Guarded `PROCESSING -> COMPLETED` transition requiring valid `ingestionToken`. Finalizes `chargedCredits = estimatedCredits` (dynamic amount), atomically clears `ingestionToken = NULL` and `ingestionLeaseExpiresAt = NULL`, and inserts `GeneratedAsset` with duration and thumbnailKey. Completed jobs are never refunded.
+    - `failVideoJob` & `cancelVideoJob`: Guarded terminal transitions from `PENDING` or `PROCESSING` only; atomically clears `ingestionToken = NULL` and `ingestionLeaseExpiresAt = NULL`, and derives exact refund dynamically from the original debit transaction record via `refundJobDebit` (verified with arbitrary 17 credits). Completed jobs match 0 rows and cannot be refunded.
+    - `reconcileStaleVideoJobs`: Sweeps stuck PENDING (> 5m) and PROCESSING (> 15m) jobs, safely transitioning them to FAILED, clearing leases, and refunding credits.
+  - Mutual Exclusivity & Post-Terminal Invariants:
+    - Completed jobs can never be refunded: calling `failVideoJob` or `cancelVideoJob` on a `COMPLETED` job matches 0 rows and issues 0 refunds.
+    - Refunded/Failed jobs can never produce assets: `completeVideoJobWithAsset` checks `status = 'PROCESSING'` and matching `ingestionToken`; if already failed or refunded, matches 0 rows and throws `JobNotCompletableError`, creating 0 assets.
+  - Test Suite (`npm run test:video-lifecycle`):
+    - 70 passing tests across schema inspection, input validation, state transitions, atomic lease cleanup, dynamic credit accounting (17 credits), daily quotas, stale reconciliation, and concurrency simulations (idempotency races, insufficient balance, lease claims).
+  - Documented Database Testing Limitations:
+    - Real PostgreSQL live verification: The current development sandbox runs offline without network access to remote databases (`aws-0-ap-northeast-1.pooler.supabase.com`) or a local PostgreSQL daemon. To guarantee zero disruption to production, no migrations or writes were executed against production. All concurrency guarantees (row locking, unique constraint violations, atomic conditional updates) were verified offline using a high-fidelity transactional simulator. Live execution against an isolated PostgreSQL instance remains a pre-release verification item.
+- **Batch 2B: Video Storage, Streaming Ingestion & Thumbnail Poster Frame Extraction** (✅ Complete — 116 tests passing)
+  - Modular Video Storage Pipeline (`src/features/video/storage/`):
+    - `keys.ts`: Deterministic, user-scoped object keys (`users/{userId}/videos/{jobId}/{assetId}.mp4` and `users/{userId}/videos/{jobId}/{assetId}-thumb.webp`). Strict segment assertions (`^[A-Za-z0-9_-]{8,64}$`) preventing path traversal (`..`), directory separators, or prefix injection. Ownership verification helpers (`isVideoKeyOwnedBy`, `isVideoThumbnailKeyOwnedBy`, `isVideoAssetKeyOwnedBy`).
+    - `ssrf.ts`: Defense-in-depth SSRF protection & Connection Pinning (`resolveAndPinAddress`, `safePinnedHttpsDownload`, `validateVideoDownloadUrl`, `safeFetchWithSsrfGuard`):
+      - Protocol validation: Enforces HTTPS only (`https:`), strictly disallowing `http:`, `file:`, `ftp:`, `gopher:`.
+      - Port validation: Enforces default HTTPS port 443; rejects custom ports.
+      - Host allowlist: Enforces approved provider hosts (`fal.media`, `*.fal.media`, `fal.ai`, `*.fal.ai`, `storage.googleapis.com`, `*.storage.googleapis.com`).
+      - IP & loopback blocking: Rejects `localhost`, `127.0.0.1`, RFC1918 private ranges (`10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`), AWS/cloud metadata link-local (`169.254.169.254`), carrier-grade NAT (`100.64.0.0/10`), and IPv6 private/loopback/link-local ranges (`::1`, `fc00::/7`, `fe80::/10`, `::ffff:0:0/96`).
+      - DNS connection pinning: `safePinnedHttpsDownload` performs DNS resolution prior to connecting, validates all returned IPs, and pins the verified IP via a custom `lookup` callback in `https.request`. The actual TCP/TLS socket connects strictly to the pinned address while setting `servername: hostname` for authentic TLS SNI and server certificate validation. This completely closes the DNS rebinding / TOCTOU gap between validation and connection.
+      - Safe redirect interceptor: Intercepts HTTP 301/302/307/308 redirects with `redirect: "manual"`, independently re-resolves and re-pins each destination hop against SSRF rules, and enforces a hard ceiling of 3 hops.
+    - `stream.ts`: Streamed retrieval without buffering 35MB files in RAM (`createVideoStreamMeter`, `downloadVideoStream`):
+      - Chunk-safe MP4 container header validation: Accumulates incoming bytes across arbitrary chunk boundaries until the first 8 bytes arrive, then validates the `ftyp` box at offset 4..8. Streams ending prematurely before 8 bytes are rejected in `flush()`.
+      - Limitation documentation: The `ftyp` box check verifies ISO Base Media File Format container signature conformity, not codec decodability. Full H.264 decodability requires parsing SPS/PPS in `moov.trak.mdia.minf.stbl.stsd.avcC`.
+      - Byte-meter Transform stream: Enforces `MAX_PROVIDER_VIDEO_BYTES` (35MB) on the fly, destroying stream if limit is exceeded.
+      - Content-Length pre-check: Aborts upstream fetch immediately if `Content-Length > 35MB`.
+      - Content-Type enforcement: Verifies `video/mp4` or `video/*`; rejects HTML error pages.
+    - `thumbnail.ts`: Video thumbnail extraction boundary (`VideoThumbnailExtractor`):
+      - Tooling check: `isFfmpegAvailable` detects presence of FFmpeg CLI in PATH via `execFile` with 2s timeout and caching.
+      - `FfmpegThumbnailExtractor`: Cleanly throws `ThumbnailExtractionError("MISSING_DEPENDENCY")` when FFmpeg is not installed on the host.
+      - `ProviderPosterThumbnailExtractor`: Converts provider-supplied poster images (buffer, data URI, or URL) into WebP quality 85 via Sharp, enforcing the 1MB thumbnail cap (`MAX_STORED_THUMBNAIL_BYTES`).
+      - `MockThumbnailExtractor`: Offline deterministic extractor for testing with custom dimensions and configurable failure simulation modes.
+      - `CompositeVideoThumbnailExtractor`: Orchestrates extraction by prioritizing provider poster frames, falling back to FFmpeg if available, or reporting clean missing dependency without corrupting asset metadata.
+    - `supabase.ts`: Supabase Storage adapter (`SupabaseVideoObjectStorage` implementing `VideoObjectStorage`):
+      - Streaming compatibility: Passes Node.js `Readable` stream directly to `@supabase/storage-js` with `duplex: "half"` without buffering the 35 MB payload in a full in-memory Buffer. Includes `content-length` header when known to avoid chunked transfer issues on backend storage.
+      - Supports buffered uploads (`put`) for WebP thumbnails.
+      - Enforces private bucket access, signed URL generation, and idempotent deletion.
+    - `ingestion.ts`: Full ingestion pipeline orchestrator (`ingestVideoOutput`, `getSignedVideoAssetUrl`):
+      - Downloads video stream with SSRF connection pinning and chunk-safe signature checks.
+      - Uploads video directly to private Supabase Storage.
+      - Extracts and uploads WebP poster frame if extractor succeeds.
+      - Graceful dependency fallback: If FFmpeg is missing and no poster was supplied, logs structured warning and sets `thumbnailKey: null` without failing ingestion or corrupting metadata (unless `requireThumbnail: true` is requested).
+      - Atomic guarded completion: Calls Batch 2A `completeVideoJobWithAsset` with matching `ingestionToken`.
+      - Orphan cleanup on failure: If database completion or any step throws, atomically deletes all uploaded storage objects (`storage.delete`). If deletion also fails, reports orphaned keys in `VideoAssetPersistenceError`.
+      - Authenticated signed URLs: `getSignedVideoAssetUrl` derives `userId` strictly from the server session (never from client input), scopes lookups by `{ id: assetId, userId }`, validates key prefix matching against `isVideoKeyOwnedBy` / `isVideoThumbnailKeyOwnedBy`, and returns safe 404 NOT_FOUND on any mismatch to prevent ID probing.
+  - Test Suite (`npm run test:video-storage`):
+    - 116 passing tests across user-scoped keys, path traversal, SSRF IP/host filtering, DNS connection pinning, DNS rebinding prevention, IPv4/IPv6 address pinning, redirect loop protection, chunk-safe header validation (single chunk, 2 chunks, small chunks, truncated streams), streaming meter, FFmpeg detection, WebP conversion, storage adapter, full ingestion lifecycle, graceful thumbnail fallback, strict mode orphan cleanup, stale lease rejection, database failure cleanup, and authenticated signed URL ownership security.
+  - Tooling & Environment Status:
+    - FFmpeg CLI: Verified absent on current Windows environment. The adapter boundary cleanly identifies this (`isFfmpegAvailable() === false`), correctly documents the missing dependency, and gracefully falls back to provider posters or `thumbnailKey: null` rather than pretending local extraction works.
+    - PostgreSQL isolation limitation: Database lifecycle guarantees remain verified via high-fidelity transactional simulation. Real isolated PostgreSQL verification remains a pre-release operational item.
+    - Supabase live integration limitation: Offline sandbox mode prevents live HTTP uploads to remote Supabase Storage. Verified through SDK source inspection and simulated streaming upload tests; isolated live integration testing remains a pre-release operational item.
+- **Batch 3: Fal.ai Provider Adapter, Webhook Fast-ACK & Asynchronous Orchestration** (✅ Complete & Verified — 119 tests passing)
+  - Official Provider Research & Specification Verification (Nov 11, 2026):
+    - Selected Model: `fal-ai/wan/v2.1/t2v-720p` (Alibaba Tongyi Wan 2.1 text-to-video, Apache 2.0 open weights, commercial use permitted under Fal.ai platform terms, verified official pricing $0.10/second for 720p -> $0.50 per 5-second video; YourAI charges 10 platform credits via configurable `getVideoCreditCost()`).
+    - Queue Submission API: `POST https://queue.fal.run/fal-ai/wan/v2.1/t2v-720p?fal_webhook={encodedWebhookUrl}`.
+    - Verified Request Schema: `prompt` (string, required), `aspect_ratio` ("16:9", "9:16", "1:1"), `num_frames: 81`, `frames_per_second: 16`, `resolution: "720p"`, `enable_safety_checker: true`.
+    - Verified Duration Mapping: 81 frames at 16 fps = ~5.06s (~5s).
+    - Verified Output Schema: `{ video: { url: string, content_type: string, file_size: number } }`.
+    - Webhook Cryptography: Ed25519 asymmetric signature using JWKS (`https://rest.fal.ai/.well-known/jwks.json`).
+    - Required Headers: `X-Fal-Webhook-Request-Id`, `X-Fal-Webhook-User-Id`, `X-Fal-Webhook-Timestamp`, `X-Fal-Webhook-Signature` (hex-encoded Ed25519 signature).
+    - Signed Message Format: Strict concatenation of `${requestId}\n${userId}\n${timestamp}\n${bodyHash}` where `bodyHash` is the lowercase hex SHA-256 digest of raw unparsed request bytes.
+  - Official Fal.ai Webhook Verifier (`src/features/video/webhooks/fal-verify.ts`):
+    - `verifyFalWebhookSignature`: Validates Ed25519 signatures on raw bytes using Node.js `crypto.verify(null, messageBuffer, key, sigBuffer)`.
+    - Strict Replay Protection: Rejects timestamps older than 300 seconds (`WEBHOOK_TIMESTAMP_TOLERANCE_MS`) or more than 60 seconds in the future.
+    - Public Key Management: Fetches and caches JWKS from `https://rest.fal.ai/.well-known/jwks.json` with 24-hour TTL; parses `OKP` Ed25519 JWKs using SPKI DER encoding.
+    - Test Utilities: `generateFalTestKeypair` and `signFalWebhookPayload` for 100% offline cryptographic tests.
+  - Webhook Identity Separation & Mismatch Defense:
+    - Delivery Identity: `X-Fal-Webhook-Request-Id` (unique per delivery, verified by Ed25519 signature, used for `ProviderWebhookEvent.eventId` deduplication).
+    - Provider Generation Identity: `body.request_id` (used for `GenerationJob.providerJobId` correlation).
+    - Mismatch Defense: If `X-Fal-Webhook-Request-Id !== body.request_id`, the webhook route strictly rejects with HTTP 400 (`Identity mismatch`) to prevent forged payload correlations.
+    - Unverified payloads rejected before parsing with HTTP 401.
+    - Duplicate deliveries of identical or different event IDs for the same provider job do not create duplicate assets or settlements (guarded by terminal job status check and unique asset constraints).
+  - Ambiguous Provider Submission Handling (`src/features/video/lifecycle.ts` & `src/features/video/providers/fal-provider.ts`):
+    - Explicit classification: Pre-transmission rejections (`ENOTFOUND`, invalid schema, pre-aborted signal) classified as `not_run` (safe to refund immediately). In-flight network drops, timeouts, 5xx, or malformed 200 classified as `unknown`.
+    - Non-premature refund: `recordVideoJobSubmissionAmbiguous` transitions job `PENDING -> PROCESSING`, records `submission = { state: "ambiguous", error, attemptedAt }` in settings, and preserves debited credits.
+    - Webhook-Driven Recovery: Submission embeds `?jobId={jobId}` into `fal_webhook` query parameter (`https://yourai.com/api/webhooks/video/fal?jobId=...`). When the webhook arrives, it recovers the job via `event.jobId`, backfills `providerJobId`, and completes asset ingestion.
+    - 15-Minute Timeout Sweep: If no webhook arrives after 15 minutes, `reconcileStaleVideoJobs()` settles the job to `FAILED` and refunds credits.
+    - Residual Ambiguity: Fal.ai does not support idempotency keys on queue submissions; automated re-submissions are avoided to prevent duplicate provider charges.
+  - Durable Worker Execution & Recovery Architecture (`src/features/video/webhooks/durable-events.ts`, `process-event.ts`, `src/app/api/cron/video-webhooks/route.ts`):
+    - Fast-ACK Guarantee: `POST /api/webhooks/video/fal/route.ts` durably persists verified events to PostgreSQL and acknowledges within <200ms with HTTP 200 `{ received: true, requestId }`.
+    - Failure Retry Semantics: If database persistence fails, returns HTTP 500 to invoke provider retry.
+    - Concurrency-safe Leases: `claimWebhookEvent` atomically claims events using conditional SQL with 5-minute lease and `attempts < 5`.
+    - Bounded Exponential Backoff: `getWebhookRetryBackoffMs(attempts)` calculates 15s, 30s, 60s, 120s, 240s, capped at 300s (5m). On `FAILED` event settlement, `leaseExpiresAt` is set into the future to enforce backoff.
+    - Exhausted Event Observability: After 5 failed attempts, events remain in `FAILED` status and are excluded from automatic claims. Operator function `resetExhaustedWebhookEvent(eventId)` enables manual replay.
+    - Production Execution Mechanisms (Zero Paid Infrastructure):
+      1. Immediate dispatch on webhook receipt via Next.js `after()` or asynchronous non-blocking task.
+      2. Client polling fallback: `GET /api/generations/video/[jobId]` checks for pending/unclaimed events for the job and claims/processes them.
+      3. Periodic Reconciliation Endpoint: `GET /api/cron/video-webhooks` (protected by `CRON_SECRET`), invoking `sweepStaleWebhookEvents()`, `processPendingWebhookBatch()`, and `reconcileStaleVideoJobs()`. Compatible with free external cron triggers (cron-job.org, GitHub Actions, Vercel Cron free tier) without requiring paid Redis/BullMQ/SQS infrastructure.
+  - Test Suite (`scripts/test-fal-webhooks-orchestration.mts` / `npm run test:video-webhooks`):
+    - 119 passing tests across Ed25519 signature verification, replay protection, adapter submission, queue polling, error normalization, secret redaction, durable persistence, Fast-ACK route handler, identity mismatch rejection, leased event claims, out-of-order deliveries, crash recovery, ambiguous submission handling, webhook recovery, stale sweeps, exponential backoff, batch worker processing, and cron reconciliation endpoint.
+- **Batch 4: Generation APIs & Client Synchronization Layer** (✅ Complete & Verified — 75 tests passing)
+  - `POST /api/generations/video` (Asynchronous Video Generation Submission):
+    - Node.js runtime, `maxDuration = 60`.
+    - Server-side Auth.js session authentication (strictly derives `userId` from verified session; never trusts client-supplied user ID).
+    - Origin verification against `APP_URL` and trusted local hostnames (`FORBIDDEN_ORIGIN` 403).
+    - Rate limiting via `checkRateLimit` (IP and authenticated-user burst throttles return 429 with `Retry-After`).
+    - Input validation via `validateVideoRequestInput` (prompt length 1-2048, aspect ratio 16:9/9:16/1:1, duration 5s, resolution 720p, fps 16 strictly aligned with Wan 2.1 81-frame model; unapproved frame rates rejected with 400).
+    - Server-side Stage 8 QA authorization (`canGenerateVideoInStage8`): Strictly enforces allowlist in production; denies access with 403 FORBIDDEN if allowlist is missing or unverified. Never trusts client QA claims.
+    - Dynamic credit debit & quota resolution: Resolves tier and daily UTC limit (`getDailyUserVideoLimit`) and charges dynamic debit amount (`getVideoCreditCost()` = 10 credits) via `createVideoJob`.
+    - Atomic job creation: Inserts `GenerationJob` with status `PENDING`, `jobType: VIDEO`, and durable submission intent (`settings.submission = { state: "intent", createdAt }`).
+    - Reliable idempotency: User-scoped idempotency key prevents duplicate job creation; replays existing job state safely if retried.
+    - Concurrency constraint: Gracefully maps `P2002` on `active_generation_per_user` to HTTP 409 `ACTIVE_JOB_EXISTS`.
+    - Asynchronous dispatch: Invokes provider (`getFalVideoProvider().submit`). On success, returns HTTP 202 Accepted with `Location: /api/generations/video/{jobId}`, `Retry-After: 4`, and `VideoJobView` reporting model native 16 fps and 5s duration.
+    - Definite rejection handling: Cleanly maps `not_run` provider rejections to HTTP 502 `UPSTREAM_REJECTED` and refunds debited credits atomically.
+    - Ambiguous outcome handling: Maps network drops or in-flight 5xx to HTTP 202 Accepted, updates submission state to `ambiguous`, and preserves debited credits. ReconcileStaleVideoJobs does NOT automatically refund ambiguous submissions after 15 minutes; instead, transitions them to an explicit operationally reviewable unresolved state (`settings.submission.unresolved = true`, `reviewStatus: "pending_operator_review"`) while preserving `PROCESSING` status and debits. Late valid webhooks safely complete unresolved jobs, while operator resolution paths (`resolveAmbiguousJobAsFailed`, `resolveAmbiguousJobAsCompleted`) provide manual resolution with full audit trail and enforce post-refund late completion rejection.
+  - Durable Submission Recovery (`src/features/video/durable-submission.ts`):
+    - Eliminates blind duplicate requests: Because Fal.ai's `queue.fal.run` API lacks native idempotency key support, YourAI prevents double submissions on server restart by distinguishing unattempted intent (`state: "intent"`) from in-flight submissions.
+    - Atomic Lease Claiming: `claimVideoSubmissionLease` uses atomic PostgreSQL conditional updates to claim a 60s submission lease (`state: "dispatching"`).
+    - Stale Intent Recovery: `reconcileStaleSubmissionIntent` re-dispatches unattempted jobs whose leases expired, while safely transitioning in-flight unconfirmed dispatches to `state: "ambiguous"` to await webhook correlation via `?jobId={jobId}` or operational review (never auto-refunded).
+  - `GET /api/generations/video/[jobId]` (Lightweight Owner-Scoped Polling Endpoint):
+    - Node.js runtime.
+    - Strictly owner-scoped lookup: Scoped by `{ id: jobId, userId }`. Returns HTTP 404 NOT_FOUND on any missing or cross-user query to prevent ID probing.
+    - Lightweight Invariant: Never streams 35 MB videos, never runs FFmpeg, and never uploads to Supabase Storage synchronously inside GET.
+    - Asynchronous Ingestion Signaling: Detects pending provider output on `PROCESSING` jobs without completed assets, and schedules the durable processing worker in the background via Next.js `after()` (`triggerPendingIngestion`).
+    - Polling Response: Returns HTTP 200 with `Retry-After: 4`, current status, estimated duration, and credit cost.
+    - Authenticated Signed URLs: Upon `COMPLETED` status, generates 10-minute signed URLs for private video and thumbnail objects, strictly validating owner key prefixes (`isVideoKeyOwnedBy`).
+    - Passive Stale Sweep: Invokes non-blocking `reconcileStaleVideoJobs()` opportunistically for the user.
+  - Independent Durable Ingestion Recovery (`src/features/video/storage/ingestion.ts` & cron endpoint):
+    - Scheduled Recovery Worker: `processPendingIngestionJobs` independently discovers and ingests ready provider results from `GenerationJob` rows where `status = 'PROCESSING'` and `settings.providerResult` is present.
+    - Decoupled from Client Polling: Jobs progress to `COMPLETED` even if the browser closes and no client ever polls `GET /api/generations/video/[jobId]`.
+    - Lease Recovery: Re-claims expired ingestion leases if an immediate trigger (`after()`) crashed or failed mid-stream.
+    - Concurrency Safety: Atomic `claimVideoIngestionLease` excludes duplicate workers from processing the same job concurrently.
+  - Client Synchronization Layer (`src/features/video/client/`):
+    - Framework-Free Controller (`VideoGenerationController`):
+      - State progression: `idle` -> `submitting` -> `polling` -> `completed` / `failed`.
+      - Polling cadence: Initial 4s delay, honoring upstream `Retry-After` header when provided.
+      - Exponential backoff with ±15% randomized jitter (4s, 8s, 16s, capped at 30s) to prevent thundering herd.
+      - Maximum polling duration: Bounded at 15 minutes (`MAX_POLL_DURATION_MS = 900,000`), settling to timeout failure if exceeded.
+      - Tab Visibility Handling: Automatically pauses polling timers when tab is hidden (`document.visibilityState === "hidden"`) and immediately resumes polling on tab focus.
+      - Network Offline Handling: Automatically pauses polling when browser loses connectivity (`navigator.onLine === false`) and resumes immediately upon `online` event.
+      - Session Expiry Detection: Stops polling on HTTP 401 and invokes `onUnauthenticated` callback to prompt user re-login.
+      - Client Stopping vs Server Cancellation: Controller `stop()` strictly aborts client-side polling and network fetches; does NOT issue a server-side cancellation mutation or disrupt credit accounting.
+    - React Hook (`useVideoGeneration`):
+      - Subscribes to `VideoGenerationController` events with automatic lifecycle cleanup on component unmount.
+  - Test Suite (`scripts/test-video-api-client.mts` / `npm run test:video-api`):
+    - 103 passing tests covering authentication, CSRF, burst rate limits, prompt validation, aspect ratio validation, unapproved 24fps rejection, QA authorization, quota enforcement, credit balance check, active generation concurrency conflict, asynchronous dispatch, fast HTTP 202 responses, provider error normalization, ambiguous outcome persistence, durable submission recovery, unresolved state preservation (no auto-refund), operator resolution paths (failed & completed), prevention of late completion post-refund, cross-user 404 security, lightweight polling invariant, background ingestion signaling, independent durable ingestion without GET, authenticated signed asset URLs, backoff jitter, visibility/offline pause/resume, and controller abort handling.
+  - Cryptographically Bound Webhook Correlation Security (`src/features/video/webhooks/correlation.ts`):
+    - Delayed Correlation Defense: Fal.ai Ed25519 webhook signatures only cover `${requestId}\n${userId}\n${timestamp}\n${bodyHash}`; query parameters such as `?jobId=` are NOT signed by the provider. Without cryptographic correlation binding, an attacker holding any valid signed Fal webhook payload could append arbitrary `jobId` parameters to associate webhooks with unowned or ambiguous jobs.
+    - Token Structure: Bound to `jobId`, `provider` ("fal-ai"), and unique `submissionAttempt` UUID. Format: `${base64url(submissionAttempt)}.${hex(nonce16)}.${hex(hmacSha256)}` signed with `WEBHOOK_CORRELATION_SECRET` or `AUTH_SECRET`. 16-byte random nonce guarantees unpredictability.
+    - URL Construction: `fal-provider.ts` constructs `https://yourai.com/api/webhooks/video/fal?jobId={jobId}&token={correlationToken}`.
+    - HTTP Boundary Enforcement (`route.ts`): If `jobId` query param is present, `token` query param is MANDATORY. Missing, malformed, cross-job substituted, or tampered tokens are rejected with HTTP 400 `Invalid correlation`. A valid Fal Ed25519 signature ALONE cannot authorize an attacker-controlled or modified `jobId`.
+    - Asynchronous Worker Enforcement (`process-event.ts`): Priority B correlation verifies that payload `_correlationToken` matches `candidateJob.settings.submission.correlationToken`, `candidateJob.settings.submission.token` (submission attempt), and `candidateJob.id` using constant-time comparison. Rejected correlations leave the job completely untouched.
+    - Replay Defense: Redeliveries on terminal jobs (`status !== 'PROCESSING'`) immediately settle to `PROCESSED` with `JOB_ALREADY_TERMINAL` without duplicate credit debits, refunds, or asset creation.
+  - Overall Stage 8 Test Coverage: **640 passing video tests** across 6 suites (116 domain + 70 lifecycle + 116 storage + 161 webhook + 103 API/client + 74 UI) + **119 image tests** = **759 total passing tests** with 0 regressions.
+- **Batch 5: Premium AI Video Generator UI (`/ai-video`) & Component Architecture** (✅ Complete & Verified — 74 tests passing)
+  - Primary Route (`src/app/(dashboard)/ai-video/page.tsx`):
+    - Server-side Auth.js session authentication; redirects unauthenticated requests cleanly to `/login`.
+    - Server-side entitlement resolution (`resolveUserVideoEntitlement`): Derives tier, daily quota, and daily usage count strictly on the server; never trusts client-supplied tier or QA claims.
+    - Owner-scoped parallel data fetching: Simultaneously retrieves any existing active video generation job (`getActiveVideoJobForUser`), recent completed videos with secure signed URLs (`getRecentVideoJobsWithUrls`), and current wallet balance (`getCreditBalance`).
+    - Cinematic layout: Header with breadcrumb, live daily usage counter pill (`VideoDailyUsage`), and `RevealGroup` Motion animations with reduced-motion support.
+  - Component Architecture (`src/components/video-generator/`):
+    - `VideoSpecsBadge` (`video-specs-badge.tsx`): Displays Wan 2.1 model telemetry badge: 720p HD resolution, native 16 FPS frame rate, 5.0s duration (81 frames), AI safety checker indicator. Accessible labels and screen reader text.
+    - `AspectRatioSelector` (`aspect-ratio-selector.tsx`): Interactive selector for 16:9 (Landscape, 1280x720), 9:16 (Portrait, 720x1280), and 1:1 (Square, 960x960) with visual frame wireframes, active Motion layout pill, and accessible radiogroup semantics (`role="radiogroup"`, `aria-checked`).
+    - `VideoPromptEditor` (`video-prompt-editor.tsx`): Textarea with live character counter (0/2048), warning threshold (>1900 chars), clear button, quick-start cinematic inspiration chips (Drone Flight, Cyberpunk, Macro, Deep Space, Vintage Drift), and validation error alert.
+    - `VideoCostSummary` (`video-cost-summary.tsx`): Clear 10-credit generation cost badge, user credit balance breakdown, insufficient credits alert (`role="alert"`) with CTA to Settings, and daily limit reached warning.
+    - `VideoDailyUsage` (`video-daily-usage.tsx`): Header pill displaying daily video generation count against tier quota with visual progress bar.
+    - `VideoPlayer` (`video-player.tsx`): Custom cinematic HTML5 video player with play/pause, scrub bar, timecode (0:02 / 0:05), loop toggle (default active), volume/mute, fullscreen, and direct authorized download.
+    - `VideoPreviewStage` (`video-preview-stage.tsx`): Viewfinder stage supporting idle viewfinder, in-progress pulse with elapsed timer and realistic stage progression (queueing -> synthesizing @ 16 FPS -> encoding H.264 -> private storage), completed player with action bar (copy prompt, reuse in composer, download), failed state with auto-refund notification, and history review view with "Back to Generator" navigation.
+    - `RecentVideosGallery` (`recent-videos.tsx`): Responsive gallery of up to 8 recent completed videos with aspect ratio badge, duration badge, thumbnail, hover play overlay, and empty state.
+    - `VideoGenerator` (`video-generator.tsx`): Primary coordinator wiring `useVideoGeneration`, server-provided `activeJob` resumption on page load/refresh, validation, blocked checks, and screen reader announcements.
+  - Secure Gallery Queries (`src/features/video/queries.ts`):
+    - `getRecentVideoJobsWithUrls`: Queries up to 8 completed video jobs for the authenticated user, verifies user-scoped storage key prefixes (`isVideoKeyOwnedBy`), and generates temporary 10-minute signed URLs without leaking raw storage keys.
+  - Test Suite (`scripts/test-video-ui.mts` / `npm run test:video-ui`):
+    - 74 automated unit/component/integration tests covering:
+      - Section 1: Video specs & aspect ratio configuration.
+      - Section 2: Prompt validation, sanitization & length limits.
+      - Section 3: Timecode formatting, aspect ratio classes & player utilities.
+      - Section 4: Video job record to sanitized client view mapping.
+      - Section 5: Gallery signed URL resolution with owner namespace verification.
+      - Section 6: Client controller state machine progression (idle -> submitting -> polling -> completed).
+      - Section 7: Component render & accessibility markup validation using `renderToStaticMarkup`.
+  - Boundaries & Spend Invariants:
+    - ₹0 spend: zero real Fal.ai calls made.
+    - Zero paid cloud infrastructure provisioned.
+    - No unapproved migrations or database writes.
+    - Production build (`next build`) and TypeScript typecheck (`tsc --noEmit`) verified 100% clean.
+    - Live E2E trial deferred until explicit authorization.
+- **Batch 6: Legal Policy Reconciliation, UI Review, Full Regression & Release Readiness** (✅ Complete & Verified — 20 legal tests, 1,027 total offline regression tests passing)
+  - Legal Policy Reconciliation:
+    - `/terms` (Terms of Service): Updated to disclose Alibaba Tongyi Wan 2.1 video generation via Fal.ai (720p HD, 5s @ native 16 FPS); dynamic credit accounting (10 platform credits per generation); ambiguous provider submission handling (debit held in `pending_operator_review` without automatic refund merely due to 15-minute timeout; webhook recovery with correlation token; manual operator review with audit trail; terminal refunds block late completion); daily video limit (1/day for promotional tier; Stage 8 QA authorization in production); shared 1 active job concurrency lock across image and video; Apache 2.0 open weights terms; private Supabase storage with 10-minute signed URLs; truthful retention disclosure (no automated background deletion schedule); and reminder that automated self-service account deletion is currently unsupported in software.
+    - `/privacy` (Privacy Policy): Added Features Analytics Inc. (Fal.ai) as an authorized third-party subprocessor for AI video model inference and webhook delivery; documented collection of video prompts, aspect ratios, and generated video MP4 / WebP poster assets; disclosed Ed25519 webhook signatures and HMAC-SHA256 correlation tokens; detailed 10-minute temporary signed URLs strictly verified by session owner prefix; and truthfully reiterated that self-service account deletion remains unsupported in software.
+    - `/acceptable-use` (Acceptable Use Policy): Clarified that prohibited content standards apply equally to video and image generation; documented prompt length limit (2,048 chars) and aspect ratios; disclosed that video requests submitted to Fal.ai enforce the provider-level AI safety checker (`enable_safety_checker: true`); disclosed that image prompts dispatch to FLUX.1 Schnell without pre-inference NLP keyword filters; prohibited tampering with webhook signatures, correlation tokens, or signed URLs; and truthfully noted the absence of internal admin moderation dashboards.
+    - Test Suite (`scripts/test-legal-policies.mts` / `npm run test:legal`): 20 passing tests verifying all legal routes, grounded terms, subprocessor disclosures, negative invariants (no fabricated operator emails, no fictitious automated AI scanners, no automated self-service account deletion, no fake moderation queues), and Stage 8 video reconciliation.
+  - Video UI Browser & Accessibility Review (`/ai-video`):
+    - Desktop and mobile layouts verified: single column mobile stack with smooth scroll-to-view helper on submit/history select; two-column desktop grid with sticky composer and preview stage.
+    - Viewfinder lifecycle verified across idle viewfinder, in-progress pulse with elapsed timer and 16 FPS stage progression (no fake percentages), completed HTML5 player with seekbar/loop/fullscreen, failed state with auto-refund notification, and history review navigation.
+    - Gallery and empty states verified: up to 8 recent videos with aspect ratio badges, duration chips, thumbnails, hover play overlays, and accessible empty state.
+    - Accessibility and reduced-motion enhancements: integrated `useReducedMotion()` into `RevealGroup`, `RevealItem`, and `AspectRatioSelector`; added `motion-reduce:animate-none` to laser scanner, pulse icons, and loading spinners.
+  - Full Regression Matrix (100% Green, 0 Regressions):
+    - Video test suites: `test:video-adapters` (116), `test:video-lifecycle` (70), `test:video-storage` (116), `test:video-webhooks` (161), `test:video-api` (103), `test:video-ui` (74) = **640 video tests**.
+    - Platform, image & legal test suites: `test:adapters` (119), `test:ui-logic` (97), `test:ui-flow` (67), `test:ui-recovery` (59), `test:ui-gallery` (39), `test:disaster-recovery` (65), `test:release-hardening` (16), `test:legal` (20) = **482 platform/image tests**.
+    - Total offline regression suite: **1,122 tests passed, 0 failed**.
+    - Static analysis & build: `npx tsc --noEmit` passed with 0 errors; `next build` passed with 0 errors across all 17 static and dynamic routes; `git diff --check` clean.
+  - Production Readiness Assessment:
+    - **Ready Items**: Complete asynchronous video generation pipeline, atomic credit debit/refund accounting, SSRF connection pinning, chunk-safe ISOBMFF MP4 validation, Ed25519 webhook signature validation, cryptographically bound delayed correlation tokens, durable event persistence with Fast-ACK, exponential backoff, cron reconciliation endpoint, lightweight polling, client synchronization controller, premium cinematic UI at `/ai-video`, reconciled legal policies, and zero-regression test coverage.
+    - **Launch Blockers**:
+      1. Single Live E2E Provider Run: Exactly one live verification generation on Fal.ai using developer trial credits to confirm live queue behavior, real network latency, and remote MP4 asset retrieval before public enablement (requires explicit user authorization).
+      2. Production Database Migrations: Applying migrations `20261111083000_add_video_generation_fields` and `20261111120000_add_provider_webhook_events` to the production PostgreSQL cluster.
+      3. Environment Variables: Setting production `FAL_KEY`, `WEBHOOK_CORRELATION_SECRET`, `CRON_SECRET`, and `STAGE_8_QA_USER_EMAILS` on the hosting provider.
+    - **Infrastructure Requirements**:
+      1. External Heartbeat / Scheduled Trigger: Configuring a recurring 1-minute or 5-minute HTTP GET to `/api/cron/video-webhooks` with `Authorization: Bearer $CRON_SECRET` (via cron-job.org, GitHub Actions scheduled workflow, or Vercel Cron free tier) to reliably sweep expired leases and reconcile stuck jobs without paid message brokers.
+      2. Supabase Storage Bucket Policy: Verifying private bucket configuration for `generated-assets` with service-role write access and signed-URL read access only.
+    - **Operational Gaps**:
+      1. Operator Resolution Tooling: In the absence of an administrative web UI, operator functions (`resolveAmbiguousJobAsFailed`, `resolveAmbiguousJobAsCompleted`) currently run via backend scripts/REPL. An operational CLI script or admin dashboard should be established for non-developer operators.
+      2. Administrative Account Closure: Manual workflow for user account closure and transactional data scrubbing is documented in legal policies but lacks automated back-office tooling.
+    - **Legal & Provider-Term Questions**:
+      1. Formal Legal Review: Governing law provisions designate India as a draft placeholder; formal legal review by qualified counsel is required to specify registered corporate entities, dispute arbitration venues, and statutory grievance officer appointments.
+      2. Enterprise Provider Agreement: Formal review of Fal.ai platform data processing addendum (DPA) and commercial SLA for production scale.
+    - **Tests Not Performed / Impossible Offline**:
+      1. Live provider inference under real network jitter, cloud edge latency, and provider queue backpressure.
+      2. Live Supabase Storage streaming upload to remote AWS Tokyo region.
+      3. Live FFmpeg thumbnail extraction in environments where FFmpeg is installed (offline tests gracefully fall back to provider posters / `null` thumbnails).
+
+## 14. Stage 8.1 — Staging Readiness Assessment Findings
+
+Detailed verification audit across 10 staging operational dimensions (Budget Constraint: ₹0, zero live calls executed):
+
+### 1. Environment & Secret Configuration
+- `DATABASE_URL`: Staging PostgreSQL pooled/direct string (`NEEDS CONFIGURATION`).
+- `AUTH_SECRET`: Staging session signing key (`NEEDS CONFIGURATION`).
+- `APP_ORIGIN`: Canonical staging public URL for CSRF validation (`NEEDS CONFIGURATION`).
+- `FAL_KEY`: Fal.ai queue submission key (`BLOCKER` — live requests impossible without key).
+- `FAL_WEBHOOK_URL`: Webhook ingress URL; defaults to `${APP_ORIGIN}/api/webhooks/video/fal` (`READY`).
+- `WEBHOOK_CORRELATION_SECRET`: HMAC-SHA256 correlation secret; falls back to `AUTH_SECRET` (`READY`).
+- `CRON_SECRET`: Bearer token for `/api/cron/video-webhooks` (`NEEDS CONFIGURATION`).
+- `STAGE_8_QA_USER_EMAILS`: Authorized QA allowlist (`NEEDS CONFIGURATION` — required in staging production mode).
+- `SUPABASE_URL`, `SUPABASE_SECRET_KEY`, `SUPABASE_STORAGE_BUCKET`: Admin storage access (`NEEDS CONFIGURATION`).
+
+### 2. Database Migrations, Backup & Rollback
+- Status: Two safe, non-locking migrations pending in `prisma/migrations/`:
+  - `20261111083000_add_video_generation_fields` (Lease columns, check constraints, duration check).
+  - `20261111120000_add_provider_webhook_events` (Webhook outbox table, enum, indexes).
+- Rollback: Reverse SQL scripts documented and tested (`READY`).
+- Pre-Migration Snapshot: `npm run backup:db` prior to running `prisma migrate deploy` (`NEEDS CONFIGURATION`).
+- Classification: `NEEDS CONFIGURATION`.
+
+### 3. Supabase Private Storage Configuration
+- Bucket: `generated-assets` must be strictly PRIVATE with zero public read access (`NEEDS CONFIGURATION`).
+- Access Pattern: Service role write; client reads strictly via 10-minute temporary signed HMAC URLs (`READY`).
+- Live Verification: In-memory/mock storage verified; remote live upload to AWS Tokyo is `NOT VERIFIED`.
+
+### 4. Cron Scheduling & Background Worker Recovery
+- Route: `GET /api/cron/video-webhooks` with bearer token auth (`READY`).
+- Workers: Sweeps expired webhook worker leases, reclaims crashed ingestion triggers, processes pending webhook outbox with exponential backoff, and cleans up ordinary stale jobs older than 15 minutes (`READY`).
+- External Scheduler: Needs 1-minute or 5-minute external HTTP heartbeat trigger (`NEEDS CONFIGURATION`).
+
+### 5. Fal.ai Configuration & Webhook Ingress
+- Model: `fal-ai/wan/v2.1/t2v-720p` (Wan 2.1 720p, 5s @ native 16 FPS, `enable_safety_checker: true`) (`READY`).
+- Cryptographic Verification: Ed25519 JWKS verification and HMAC correlation token binding (`READY`).
+- Ingress: Publicly reachable HTTPS endpoint required for Fal delivery (`BLOCKER` for live test).
+
+### 6. Authentication, Authorization & Security
+- Session cookies (Auth.js v5 JWT), server QA gating, CSRF check, 10 req/min rate limit, SSRF DNS connection pinning, CSP `media-src` verified clean (`READY`).
+
+### 7. Operator Tooling, Account Deletion & Disaster Recovery
+- Operator Functions: `resolveAmbiguousJobAsFailed` and `resolveAmbiguousJobAsCompleted` implemented in `lifecycle.ts` (`READY`); CLI wrapper script for operational staff (`NEEDS CONFIGURATION`).
+- Account Deletion: Disabled in software; manual deletion SOP required (`NEEDS CONFIGURATION`).
+- DR Tooling: V3 chunk-framed backup and safe reconciliation restore verified (`READY`).
+
+### 8. Monitoring & Diagnostics
+- Liveness Probe: `GET /api/health` (`READY`).
+- Structured Logs: `[fal-webhook]` and `[video-ingestion]` logs with redacted secrets (`READY`).
+- Cloud APM: Centralized Sentry/Datadog logging (`NEEDS CONFIGURATION`).
+
+### 9. Offline vs Live Test Boundaries
+- Offline Regression: 1,122 tests passed across 14 suites (`READY`).
+- Live Tests: Live migration application, remote Supabase upload, single Fal.ai trial credit E2E run (`NOT VERIFIED`).
+
+### 10. Step-by-Step Staging Setup Checklist
+- Phase 1: Environment & Secrets Provisioning.
+- Phase 2: Database Backup & Migration Deployment.
+- Phase 3: Supabase Storage Bucket Security Audit.
+- Phase 4: Public Ingress & Webhook Endpoint Routing.
+- Phase 5: External Heartbeat Scheduler Setup.
+- Phase 6: Single Live E2E Video Generation Test Run.
+- Phase 7: Post-Run Operational & Financial Ledger Verification.
+
+---
+
+## 15. Stage 8.2 — Zero-Cost Operational Preparation Completed
+
+All Stage 8.2 deliverables and three focused reliability corrections have been executed and verified strictly within ₹0 expenditure boundaries (no live API requests, zero trial credit consumption, no cloud database or storage mutations):
+
+### 1. Operator CLI (`scripts/resolve-ambiguous-job.mts`) — Completed Asset Physical Verification
+- **Operational Purpose**: Enables operational engineers to safely inspect and settle generation jobs trapped in an ambiguous or unresolved processing state (e.g. provider queue timeout, dropped connection, network partition).
+- **Supported Terminal Actions**:
+  1. `--action=failed`: Settles job as `FAILED` and dynamically refunds the exact debited credit amount via the double-entry credit ledger (`CreditTransaction` + `CreditWallet`).
+  2. `--action=completed`: Settles job as `COMPLETED`, finalizes credit charges, and registers the output asset with validated dimensions, duration, and file size in `GeneratedAsset`.
+- **Physical Asset Verification & Safety Invariants (Focused Correction 1)**:
+  - **Storage Object Existence Verification**: Before settling as `COMPLETED`, the CLI queries private storage (`storageVerifier`) to confirm the physical object exists in the private bucket. **Storage-key namespace validation alone is explicitly rejected as proof of existence**.
+  - **MIME Type & Integrity Checks**: Verifies that the storage object MIME type is supported (`video/mp4` or `video/quicktime`); rejects non-video files (e.g. `text/plain`, `application/octet-stream`).
+  - **Size Bounds & Mismatch Protection**: Verifies object size is strictly positive (> 0) and does not exceed `MAX_STORED_VIDEO_BYTES` (35 MB). Rejects any mismatch between specified `--size-bytes` and actual storage size.
+  - **Video Metadata Validation**: Enforces supported dimensions (`1280x720` for 16:9, `720x1280` for 9:16, `960x960` for 1:1) and supported duration (`5.0s`).
+  - **Thumbnail Verification**: If `--thumbnail-key` is supplied, verifies user namespace ownership, physical object existence in storage, image MIME type (`image/webp`, `image/jpeg`, `image/png`), and size limit (<= 1 MB).
+  - **Dry-Run by Default**: Default mode queries and prints masked user details, proposed state transitions, and confirmed storage object verification details without applying any database mutations. Mutation requires explicit `--confirm` flag.
+  - **Terminal State Lock**: Strictly blocks modifying already terminal jobs (`COMPLETED`, `FAILED`, `CANCELLED`) or `PENDING` jobs.
+- **Verification**: Tested via dedicated offline test suite `scripts/test-operator-cli.mts` (**74/74 tests passing**).
+
+### 2. Administrative Account Deletion SOP (`docs/runbooks/account-deletion-sop.md`) (Focused Correction 2)
+- **Document ID**: `SOP-OPS-004` (Classification: Internal Operational Runbook).
+- **Documentation Only**: **Zero deletion scripts implemented, provided, or executed**.
+- **Regulatory Disclaimer**: Explicitly states that the document **does NOT claim or certify compliance with GDPR, CCPA, the Indian Digital Personal Data Protection Act (DPDP), or any specific regulation**.
+- **Legal Verification Requirement**: Marks the proposed **7–10 year retention duration** for financial records and statutory applicability across tax/commercial jurisdictions as **strictly requiring qualified legal verification** before production adoption.
+- **Double-Entry Ledger Reconciliation**:
+  - Details the fundamental invariant: `CreditWallet.balance == SUM(CreditTransaction.amount)`.
+  - Documents **Pattern A (Balancing Forfeiture Transaction)** and **Pattern B (Frozen Balance Preservation)** as proposed engineering patterns strictly requiring qualified legal and product approval before operational enforcement.
+  - Prohibits silent balance overwrites or ledger deletions: never executes un-audited `UPDATE "CreditWallet" SET balance = 0` or deletes `CreditTransaction` rows.
+- **5-Stage Administrative Protocol**: Request & hold check, job draining & session revocation, PII tombstoning & ledger reconciliation, Supabase storage purge, and ticket audit closure.
+
+### 3. Staging Configuration, Migration & Verification Runbook (`docs/runbooks/staging-setup-runbook.md`) (Focused Correction 3)
+- **Document ID**: `RUNBOOK-STAGING-001`.
+- **Migration Rollback Data Loss Warning**:
+  - Explicitly documents that rolling back migrations after active usage **causes permanent, irreversible data loss**:
+    - `DROP TABLE "ProviderWebhookEvent"` destroys all stored webhook payloads, retry counters, and correlation audit logs.
+    - `DROP COLUMN "durationSeconds"` and `DROP COLUMN "thumbnailKey"` permanently destroys video playback duration and poster thumbnail references for all video `GeneratedAsset` records.
+    - `DROP COLUMN "ingestionToken"` and `DROP COLUMN "ingestionLeaseExpiresAt"` wipes all active ingestion leases from `GenerationJob`.
+  - **Mandatory Pre-Rollback Requirements**: Mandates a verified pre-rollback database backup (`npm run backup:db`), a reviewed recovery plan signed off by Lead Engineer / SRE, and traffic freezing on video ingress routes.
+- **Prisma Migration-History Reconciliation & Operational Hierarchy**:
+  - Clarifies that **forward-fix migrations** or **verified database snapshot restoration** (`npm run restore:db`) are strongly preferred over manual Prisma migration-history deletion.
+  - Manual modification or deletion of `_prisma_migrations` is an exceptional emergency fallback that **strictly requires explicit database-owner approval** and a reviewed recovery plan; it is never treated as routine rollback.
+  - Explains the emergency protocol for reconciling `_prisma_migrations` and `schema.prisma` if manual DDL is authorized.
+- **Non-Execution Notice**:
+  - Explicitly states that **no live database rollback drill has been performed on staging or production infrastructure** (strict ₹0 expenditure and zero-mutation boundary).
+- **Comprehensive Staging Blueprint**:
+  - Complete environment variable dictionary with types, sensitivities, and defaults.
+  - External cron heartbeat configuration (1-to-5 minute interval GET to `/api/cron/video-webhooks` with bearer token auth).
+  - Private Supabase bucket security requirements (`generated-assets` strictly private, RLS enabled, 10-minute temporary signed URLs).
+  - Public Fal.ai webhook ingress setup (HTTPS endpoint, tunnel setup, Ed25519 JWKS verification, HMAC correlation token binding).
+  - Clear separation between Configuration Tasks and Verification Tasks with sign-off checklists.
+
+### 4. Total Verification & Regression Metrics
+- **Test Suites (15 Suites, 1,196 Passing Tests, 0 Failures)**:
+  - `test:operator-cli`: 74 passed (+7 focused storage verification tests)
+  - `test:video-adapters`: 116 passed
+  - `test:video-lifecycle`: 70 passed
+  - `test:video-storage`: 116 passed
+  - `test:video-webhooks`: 161 passed
+  - `test:video-api`: 103 passed
+  - `test:video-ui`: 74 passed
+  - `test:legal`: 20 passed
+  - `test:release-hardening`: 16 passed
+  - `test:disaster-recovery`: 65 passed
+  - Image suites (`test:accounting`, `test:adapters`, `test:api`, `test:integration`, `test:ui-logic`, etc.): 381 passed
+- **TypeScript Type Check**: `npx tsc --noEmit` clean (0 errors).
+- **Next.js Production Build**: `npm run build` compiled and optimized all 23 app routes successfully.
+- **Git Diff & Formatting**: `git diff --check` clean (0 whitespace/formatting issues).
+- **Budget Constraint**: ₹0 expenditure maintained (no live Fal.ai calls, zero cloud mutations).

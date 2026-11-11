@@ -31,6 +31,7 @@ backups/
 *.dump
 *.dump.enc
 *.sql
+!prisma/migrations/**/*.sql
 *.sql.gz
 *.enc
 *.meta.json

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { INITIAL_CREDITS, LEGAL_ROUTES, ROUTES, SITE } from "@/lib/constants";
 import { DAILY_USER_IMAGE_LIMIT, IMAGE_QUALITIES } from "@/features/generations/config";
+import { DEFAULT_DAILY_USER_VIDEO_LIMIT, DEFAULT_VIDEO_CREDIT_COST } from "@/features/video/config";
 
 export const metadata: Metadata = {
   title: "Terms of Service",
@@ -9,7 +10,7 @@ export const metadata: Metadata = {
 };
 
 export default function TermsOfServicePage() {
-  const lastUpdated = "November 10, 2026";
+  const lastUpdated = "November 11, 2026";
 
   return (
     <article className="mx-auto max-w-4xl px-4 py-16 sm:px-6 sm:py-24">
@@ -20,7 +21,7 @@ export default function TermsOfServicePage() {
         <h1 className="mt-4 font-display text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
           Terms of Service
         </h1>
-        <p className="mt-2 text-sm text-muted">Last updated: {lastUpdated} • Version 1.0 (Pre-Release)</p>
+        <p className="mt-2 text-sm text-muted">Last updated: {lastUpdated} • Version 1.1 (Pre-Release)</p>
       </header>
 
       <div className="space-y-10 text-[15px] leading-relaxed text-muted">
@@ -44,13 +45,22 @@ export default function TermsOfServicePage() {
         <section className="space-y-3">
           <h2 className="text-xl font-semibold text-foreground">2. Service Description &amp; Pre-Release Status</h2>
           <p>
-            {SITE.name} is an AI-powered creative production platform. At present, the Service offers our text-to-image
-            generation capability powered by deep learning models (including FLUX.1 Schnell hosted on Cloudflare Workers AI).
-            Additional media capabilities, such as AI Video Generation and Video Clipping, are planned for subsequent releases.
+            {SITE.name} is an AI-powered creative production platform. The Service currently provides:
+          </p>
+          <ul className="list-disc space-y-1.5 pl-6">
+            <li>
+              <strong>AI Image Generation:</strong> Text-to-image synthesis powered by FLUX.1 Schnell hosted on Cloudflare Workers AI.
+            </li>
+            <li>
+              <strong>AI Video Generation:</strong> Text-to-video synthesis powered by Alibaba Tongyi Wan 2.1 (720p HD, 5 seconds at native 16 FPS) hosted on Fal.ai, operating under Stage 8 evaluation and access controls.
+            </li>
+          </ul>
+          <p>
+            Additional media capabilities, such as automated Video Clipping, are planned for subsequent development phases.
           </p>
           <p>
-            The Service is currently in a pre-release evaluation phase. While we strive for high uptime and rapid inference,
-            we make no commitments regarding availability, latency, or uninterrupted access. We reserve the right to
+            The Service is currently in a pre-release evaluation phase. While we strive for high uptime and reliable inference,
+            we make no contractual commitments regarding availability, latency, or uninterrupted access. We reserve the right to
             modify, throttle, suspend, or discontinue any feature at any time without prior notice.
           </p>
         </section>
@@ -69,7 +79,7 @@ export default function TermsOfServicePage() {
         </section>
 
         <section className="space-y-3">
-          <h2 className="text-xl font-semibold text-foreground">4. Promotional Credits, Accounting &amp; Automatic Failure Restorations</h2>
+          <h2 className="text-xl font-semibold text-foreground">4. Promotional Credits, Accounting &amp; Refund Behavior</h2>
           <p>
             Access to computational inference is metered via credits tracked in an ACID-compliant double-entry ledger:
           </p>
@@ -79,8 +89,12 @@ export default function TermsOfServicePage() {
               grant of {INITIAL_CREDITS} credits.
             </li>
             <li>
-              <strong>Generation Pricing:</strong> Fast generation consumes {IMAGE_QUALITIES.fast.credits} credit per job; Detailed
-              generation consumes {IMAGE_QUALITIES.detailed.credits} credits per job.
+              <strong>Generation Pricing:</strong>
+              <ul className="mt-1 list-disc space-y-1 pl-6 text-sm">
+                <li>Fast image generation consumes {IMAGE_QUALITIES.fast.credits} credit per job.</li>
+                <li>Detailed image generation consumes {IMAGE_QUALITIES.detailed.credits} credits per job.</li>
+                <li>AI video generation consumes {DEFAULT_VIDEO_CREDIT_COST} credits per 5-second 720p generation.</li>
+              </ul>
             </li>
             <li>
               <strong>Non-Redeemable Promotional Units:</strong> Promotional credits are granted gratuitously for product demonstration,
@@ -89,36 +103,38 @@ export default function TermsOfServicePage() {
               active on the platform.
             </li>
             <li>
-              <strong>Automatic Credit Restoration on Generation Failure:</strong> Credits debited for a generation job are automatically
-              refunded to your account ledger under the following implemented failure conditions:
+              <strong>Credit Debiting &amp; Automatic Failure Restorations:</strong> Credits debited for a generation job are restored to your account ledger under the following implemented conditions:
               <ul className="mt-1.5 list-disc space-y-1 pl-6 text-sm">
                 <li>
-                  <em>Upstream Rejection / Pre-Flight Failure:</em> The inference provider rejects the request before execution (e.g. schema
-                  validation rejection or upstream quota exhaustion) or network connectivity fails before the request is transmitted.
+                  <em>Upstream Rejection / Pre-Flight Failure:</em> The inference provider rejects the request before execution (e.g. invalid parameters or upstream rate limiting) or network connectivity fails before request transmission. In these cases, debited credits are restored immediately.
                 </li>
                 <li>
-                  <em>Downstream Pipeline Failure:</em> The model completes inference, but downstream processing fails (e.g. image decoding,
-                  WebP conversion, storage upload, or database asset registration error).
+                  <em>Downstream Pipeline Failure:</em> The model completes inference, but downstream asset ingestion fails (e.g. payload decoding, storage upload, or database registration failure). Debited credits are restored automatically.
                 </li>
                 <li>
-                  <em>Timeout &amp; Reconciliation:</em> An in-flight job times out or suffers an unresolvable network interruption; once the
-                  stale threshold expires (2 minutes for unstarted jobs, 5 minutes for processing jobs), background reconciliation settles the
-                  job as failed and restores the debited credits.
+                  <em>Ordinary Job Reconciliation:</em> An in-flight job times out or suffers an unresolvable interruption where provider non-execution is confirmed; background reconciliation settles the job as failed and restores debited credits.
                 </li>
               </ul>
             </li>
             <li>
+              <strong>Ambiguous Submissions &amp; Operator Resolution:</strong> If an inference submission outcome is ambiguous (such as an in-flight network disconnection, gateway timeout, or unconfirmed provider queue status), debited credits are <strong>not automatically refunded merely due to an elapsed 15-minute timeout</strong>. To prevent double credit loss or duplicate generation charges while the third-party provider is actively processing, the job is preserved in an unresolved state (<code>pending_operator_review</code>) while the user&apos;s debit is held. If an authentic asynchronous webhook arrives with a cryptographically bound correlation token, the job completes normally. Otherwise, the job requires manual operator review and settlement, recording a permanent audit trail. Terminal refunds strictly prevent post-refund late completions.
+            </li>
+            <li>
               <strong>Finality of Completed Generations:</strong> When a generation job completes successfully and the resulting asset is
               registered in your account, the credit deduction is final. Credits cannot be refunded or restored on the basis of subjective
-              dissatisfaction with style, composition, or artistic aesthetic.
+              dissatisfaction with artistic aesthetic, style, lighting, or compositional interpretation.
             </li>
             <li>
               <strong>Daily Generation Limits:</strong> To ensure equitable resource distribution and prevent automated resource
-              exhaustion, accounts are subject to an authoritative daily quota of {DAILY_USER_IMAGE_LIMIT} counted generation jobs per UTC day.
+              exhaustion, promotional accounts are subject to authoritative daily quotas:
+              <ul className="mt-1 list-disc space-y-1 pl-6 text-sm">
+                <li>Up to {DAILY_USER_IMAGE_LIMIT} counted image generations per UTC day.</li>
+                <li>Up to {DEFAULT_DAILY_USER_VIDEO_LIMIT} counted video generation per UTC day for promotional accounts. During Stage 8 evaluation, video generation in production environments is restricted to authorized QA accounts.</li>
+              </ul>
             </li>
             <li>
               <strong>Concurrency Restrictions:</strong> Accounts are restricted to a maximum of 1 active concurrent generation job at
-              any time. Attempting to initiate concurrent jobs will be rejected until the running job completes or fails.
+              any time across all media types (enforced by database constraint). Attempting to initiate concurrent jobs will be rejected until the running job reaches a terminal state.
             </li>
           </ul>
         </section>
@@ -128,20 +144,25 @@ export default function TermsOfServicePage() {
           <p>
             <strong>Your Prompts:</strong> You retain ownership of the text prompts and inputs you provide to the Service. By submitting
             prompts, you grant us a worldwide, royalty-free license to transmit, process, and execute those prompts through our
-            infrastructure and inference providers solely as necessary to provide and operate the Service.
+            infrastructure and inference providers (including Cloudflare and Fal.ai) solely as necessary to provide and operate the Service.
           </p>
           <p>
-            <strong>Generated Assets:</strong> Subject to your compliance with these Terms and applicable law, we claim no ownership over
-            the raster outputs generated from your prompts. However, you acknowledge the probabilistic and public nature of AI models:
+            <strong>Generated Assets &amp; Model Terms:</strong> Subject to your compliance with these Terms, third-party provider licenses, and applicable law, we claim no ownership over
+            the raster images or video outputs generated from your prompts. You acknowledge applicable model licenses:
           </p>
           <ul className="list-disc space-y-2 pl-6">
             <li>
-              <strong>No Guarantee of Uniqueness:</strong> Other users may provide identical or substantially similar prompts and receive
-              similar or identical outputs. The Service makes no representation that outputs will be unique or copyrightable.
+              <strong>FLUX.1 Schnell:</strong> Open weights released under the Apache 2.0 license, subject to Black Forest Labs usage policies.
             </li>
             <li>
-              <strong>No Warranty of Accuracy or Legality:</strong> Generated imagery is produced algorithmically. We do not warrant
-              that generated images are accurate, safe, free of unintended artifacts, or compliant with third-party intellectual property rights.
+              <strong>Tongyi Wan 2.1:</strong> Open weights released by Alibaba Cloud under the Apache 2.0 license, permitting commercial use subject to platform and provider acceptable use terms.
+            </li>
+            <li>
+              <strong>No Guarantee of Uniqueness:</strong> Because generative models operate probabilistically on public datasets, other users may provide identical or substantially similar prompts and receive similar or identical outputs. The Service makes no representation that outputs will be unique or copyrightable.
+            </li>
+            <li>
+              <strong>No Warranty of Accuracy or Legality:</strong> Generated imagery and video are produced algorithmically. We do not warrant
+              that generated assets are accurate, safe, free of unintended artifacts, or compliant with third-party intellectual property rights.
             </li>
             <li>
               <strong>Commercial Risk:</strong> You assume all risks and liabilities associated with the commercial exploitation,
@@ -170,13 +191,12 @@ export default function TermsOfServicePage() {
         <section className="space-y-3">
           <h2 className="text-xl font-semibold text-foreground">7. Storage, Retention &amp; Signed URLs</h2>
           <p>
-            Generated image assets are stored in private cloud storage hosted on Supabase (Tokyo region). Direct public file access
+            Generated image assets (WebP, up to 5 MB) and video assets (H.264 MP4, up to 35 MB, with WebP poster thumbnail) are stored in private cloud storage hosted on Supabase (Tokyo region). Direct public file access
             is disabled. Asset URLs provided through the interface are cryptographically signed HMAC tokens valid for a maximum
-            duration of 10 minutes (600 seconds) and require active account authorization to generate.
+            duration of 10 minutes (600 seconds) and strictly require active account authorization and ownership verification to generate.
           </p>
           <p>
-            While we retain your generated assets to display in your account history, the Service does not guarantee permanent archival
-            storage. You are encouraged to download any generated assets you wish to preserve.
+            <strong>Retention Disclosure:</strong> The Service does not currently operate an automated background expiration or deletion schedule for stored media assets. Assets remain accessible in your account history unless removed during platform maintenance or database resets. We do not promise fixed 30-day or permanent archival retention; you are strongly encouraged to download any generated assets you wish to preserve.
           </p>
         </section>
 
@@ -188,8 +208,8 @@ export default function TermsOfServicePage() {
           </p>
           <p>
             <strong>Self-Service Account Deletion:</strong> Please be advised that automated self-service account deletion is currently
-            unsupported in the software due to data integrity constraints involving relational budget allocations and credit transaction
-            ledgers. Official operator contact channels and manual account closure procedures will be published prior to public launch.
+            unsupported in the software due to data integrity constraints involving relational budget allocations, credit transaction
+            ledgers, generation jobs, and asset records. Dedicated operator contact channels and manual account closure procedures will be published prior to public launch.
           </p>
         </section>
 

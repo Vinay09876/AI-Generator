@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { LEGAL_ROUTES, ROUTES, INITIAL_CREDITS, SITE } from "../src/lib/constants";
 import { DAILY_USER_IMAGE_LIMIT, IMAGE_QUALITIES, PROMPT_MAX_LENGTH } from "../src/features/generations/config";
+import { DEFAULT_DAILY_USER_VIDEO_LIMIT, DEFAULT_VIDEO_CREDIT_COST } from "../src/features/video/config";
 
 let passed = 0;
 let failed = 0;
@@ -356,6 +357,107 @@ async function run() {
           `File ${file} must not claim unbuilt operational capability "${phrase}"`,
         );
       }
+    }
+  });
+
+  console.log("\n# Stage 8 — Video Legal Reconciliation & Negative Invariants");
+
+  await test("Terms of Service accurately discloses video generation pricing, model & quotas", () => {
+    const content = readFile("src/app/(marketing)/terms/page.tsx");
+    assert.ok(
+      content.includes(`${DEFAULT_VIDEO_CREDIT_COST} credits`) || content.includes("DEFAULT_VIDEO_CREDIT_COST"),
+      "Terms must disclose video credit pricing (10 credits)",
+    );
+    assert.ok(
+      content.includes("Wan 2.1"),
+      "Terms must disclose Tongyi Wan 2.1 video model",
+    );
+    assert.ok(
+      content.includes("Fal.ai"),
+      "Terms must disclose Fal.ai inference hosting",
+    );
+    assert.ok(
+      content.includes("16 FPS") || content.includes("16 fps"),
+      "Terms must accurately disclose native 16 FPS frame rate",
+    );
+    assert.ok(
+      content.includes("Apache 2.0"),
+      "Terms must disclose Apache 2.0 open weights licensing for Wan 2.1",
+    );
+    assert.ok(
+      content.includes("1 active concurrent") || content.includes("maximum of 1 active concurrent"),
+      "Terms must disclose platform-wide 1 active generation job concurrency lock across all media types",
+    );
+  });
+
+  await test("Terms of Service accurately discloses ambiguous submission handling and operator review", () => {
+    const content = readFile("src/app/(marketing)/terms/page.tsx");
+    assert.ok(
+      content.toLowerCase().includes("not automatically refunded") || content.toLowerCase().includes("not automatically refunded merely"),
+      "Terms must state ambiguous submissions are not automatically refunded merely due to 15-minute timeout",
+    );
+    assert.ok(
+      content.includes("pending_operator_review") || content.toLowerCase().includes("operator review"),
+      "Terms must disclose operator review for ambiguous submissions",
+    );
+    assert.ok(
+      content.toLowerCase().includes("correlation token"),
+      "Terms must reference cryptographic correlation token for webhook recovery",
+    );
+  });
+
+  await test("Privacy Policy accurately documents Fal.ai subprocessor and video metadata", () => {
+    const content = readFile("src/app/(marketing)/privacy/page.tsx");
+    assert.ok(
+      content.includes("Fal.ai") || content.includes("Features Analytics"),
+      "Privacy policy must list Fal.ai / Features Analytics Inc. as a subprocessor",
+    );
+    assert.ok(
+      content.includes("Wan 2.1"),
+      "Privacy policy must identify Wan 2.1 video generation model",
+    );
+    assert.ok(
+      content.includes("Ed25519"),
+      "Privacy policy must document Ed25519 cryptographic webhook verification",
+    );
+    assert.ok(
+      content.includes("MP4") && content.includes("WebP"),
+      "Privacy policy must document storage of MP4 video and WebP thumbnail assets",
+    );
+  });
+
+  await test("Acceptable Use Policy accurately specifies video technical boundaries & safety checker", () => {
+    const content = readFile("src/app/(marketing)/acceptable-use/page.tsx");
+    assert.ok(
+      content.includes("safety_checker") || content.toLowerCase().includes("safety checker"),
+      "AUP must disclose provider AI safety checker enabled for video generation",
+    );
+    assert.ok(
+      content.includes(`${PROMPT_MAX_LENGTH}`) || content.includes("PROMPT_MAX_LENGTH"),
+      "AUP must enforce prompt max length limit",
+    );
+    assert.ok(
+      content.toLowerCase().includes("correlation token") || content.toLowerCase().includes("webhook"),
+      "AUP must prohibit tampering with webhook correlation tokens",
+    );
+  });
+
+  await test("No fabricated retention periods (no 30-day promise without cleanup mechanism)", () => {
+    const files = [
+      "src/app/(marketing)/terms/page.tsx",
+      "src/app/(marketing)/privacy/page.tsx",
+    ];
+
+    for (const file of files) {
+      const lower = readFile(file).toLowerCase();
+      assert.ok(
+        !lower.includes("30 days") && !lower.includes("30-day retention"),
+        `File ${file} must not claim unbuilt 30-day retention cleanup schedule`,
+      );
+      assert.ok(
+        lower.includes("does not currently operate an automated") || lower.includes("does not operate an automated"),
+        `File ${file} must truthfully disclose absence of automated background media deletion`,
+      );
     }
   });
 
