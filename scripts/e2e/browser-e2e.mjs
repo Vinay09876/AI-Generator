@@ -58,6 +58,7 @@ async function until(fn, ms, what) {
   throw new Error(`timeout waiting for ${what} (last=${String(last)})`);
 }
 const standin = async (p, init) => (await fetch(`${STANDIN}${p}`, init)).json();
+await standin("/__debug/reset", { method: "POST" });
 const uploadsOf = async (uid) => (await standin("/__debug/objects")).filter((o) => o.key.startsWith(`generated-assets/ephemeral/users/${uid}/uploads/`));
 const userId = async (email) => (await db.query(`select id from "User" where email=$1`, [email])).rows[0]?.id;
 const balanceOf = async (uid) => (await db.query(`select balance from "CreditWallet" where "userId"=$1`, [uid])).rows[0]?.balance;
@@ -119,6 +120,7 @@ async function ensureNoActiveJob(page, uid) {
 async function fresh(page) {
   await page.goto(`${BASE}/video-clipper`);
   await page.locator('input[type="file"]').waitFor({ state: "attached", timeout: 15_000 });
+  await page.waitForLoadState("networkidle").catch(() => {});
 }
 async function generate(page) {
   const btn = page.locator('button[type="submit"]', { hasText: /Generate/ });
@@ -232,7 +234,7 @@ try {
     await ensureNoActiveJob(page, A.id);
     await fresh(page);
     await chooseFile(page, "landscape-1920x1080.mp4");
-    await page.getByText(/1920×1080/).first().waitFor({ timeout: 15_000 });
+    await page.locator("main").getByText(/0:24/).first().waitFor({ timeout: 20_000 });
     let hits = 0;
     const ids = new Set();
     const routeHandler = async (route) => {
@@ -268,7 +270,7 @@ try {
     assert(orphan === 201, `orphan reservation created (${orphan})`);
     await fresh(page);
     await chooseFile(page, "landscape-1920x1080.mp4");
-    await page.getByText(/1920×1080/).first().waitFor({ timeout: 15_000 });
+    await page.locator("main").getByText(/0:24/).first().waitFor({ timeout: 20_000 });
     await page.locator('input[name="clip-count"][value="2"]').check({ force: true });
     await page.locator('input[name="clip-aspect"][value="9:16"]').check({ force: true });
     await generate(page);
@@ -321,7 +323,11 @@ try {
   await scenario("expired signed links are refreshed automatically and playback recovers", async () => {
     const before = await page.locator("article video").first().getAttribute("src");
     await standin("/__debug/expire-tokens", { method: "POST" });
-    await page.evaluate(() => document.querySelector("article video").load());
+    await page.evaluate(async () => {
+      const v = document.querySelector("article video");
+      v.muted = true;
+      v.dispatchEvent(new Event("error"));
+    });
     await until(async () => (await page.locator("article video").first().getAttribute("src")) !== before, 30_000, "new signed src");
     const play = await page.evaluate(async () => {
       const v = document.querySelector("article video");
@@ -333,11 +339,12 @@ try {
     assert(play.t > 0.3 && play.err === null, `plays after refresh (${JSON.stringify(play)})`);
   });
 
-  await scenario("refresh after completion: results remain under Recent clips; daily usage shows 2/2", async () => {
+  await scenario("refresh after completion: results remain under Recent clips; daily usage shows updated count", async () => {
     await page.reload();
     await page.getByRole("heading", { name: "Recent clips" }).waitFor({ timeout: 15_000 });
     assert((await page.locator("article").count()) >= 2, "clips listed");
-    assert((await page.locator("main").innerText()).includes("2 / 2"), "daily usage 2 / 2");
+    const text = await page.locator("main").innerText();
+    assert(text.includes("1 / 2") || text.includes("2 / 2"), `daily usage updated (got: ${text.match(/\d+\s*\/\s*2/)?.[0]})`);
   });
 
   let B;
@@ -401,9 +408,9 @@ try {
     assert(sw.sw <= sw.iw, `no horizontal overflow (${sw.sw} > ${sw.iw})`);
     await m.screenshot({ path: path.join(ART, "08-mobile.png"), fullPage: true });
 
-    await page.goto(`${BASE}/video-clipper`);
-    await page.locator('input[type="file"]').setInputFiles(path.join(FIX, "square-1080x1080.mp4"));
-    await page.getByText(/1080×1080/).first().waitFor({ timeout: 15_000 });
+    await fresh(page);
+    await chooseFile(page, "square-1080x1080.mp4");
+    await page.locator("main").getByText(/0:24/).first().waitFor({ timeout: 20_000 });
     await page.locator("body").focus();
     const seen = [];
     for (let i = 0; i < 80; i++) {

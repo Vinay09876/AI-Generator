@@ -73,8 +73,8 @@ const {
 } = await import("@/features/video/storage/ingestion");
 
 const { VideoProviderError } = await import("@/features/video/types");
-const { POST: webhookRouteHandler } = await import("@/app/api/webhooks/video/fal/route");
-const { handleVideoCronRequest: cronRouteHandler } = await import("@/app/api/cron/video-webhooks/route");
+const { handleFalWebhookRequest: webhookRouteHandler } = await import("@/features/video/webhooks/fal-handler");
+const { handleVideoCronRequest: cronRouteHandler } = await import("@/features/video/cron-auth");
 const { MOCK_MP4_PLAYABLE_DATA_URI } = await import("@/features/video/providers/fixture");
 const { MockThumbnailExtractor } = await import("@/features/video/storage/thumbnail");
 

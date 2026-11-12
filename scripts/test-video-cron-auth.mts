@@ -11,8 +11,7 @@ for (const k of ["DATABASE_URL", "TEST_DATABASE_URL", "SUPABASE_URL", "SUPABASE_
   delete process.env[k];
 }
 
-const { isVideoCronRequestAuthorized } = await import("@/features/video/cron-auth");
-const { handleVideoCronRequest } = await import("@/app/api/cron/video-webhooks/route");
+const { isVideoCronRequestAuthorized, handleVideoCronRequest } = await import("@/features/video/cron-auth");
 
 let pass = 0;
 let fail = 0;

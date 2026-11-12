@@ -175,13 +175,26 @@ export class StorageReferenceVideoSource implements VideoSource {
     let bytesReceived = 0;
 
     await new Promise<void>((resolve, reject) => {
+      let rejected = false;
+      const abortCleanup = (err: Error) => {
+        if (rejected) return;
+        rejected = true;
+        readable.destroy();
+        writeStream.destroy();
+        const doUnlink = () => fsp.unlink(tempFilePath).catch(() => {});
+        if (writeStream.closed) {
+          void doUnlink().finally(() => reject(err));
+        } else {
+          writeStream.once("close", () => {
+            void doUnlink().finally(() => reject(err));
+          });
+        }
+      };
+
       readable.on("data", (chunk: Buffer | Uint8Array) => {
         bytesReceived += chunk.length;
         if (bytesReceived > maxBytes) {
-          readable.destroy();
-          writeStream.destroy();
-          fsp.unlink(tempFilePath).catch(() => {});
-          reject(
+          abortCleanup(
             new Error(
               `Streamed storage source exceeded maximum size limit (${maxBytes} bytes). Transfer aborted.`,
             ),
@@ -190,19 +203,15 @@ export class StorageReferenceVideoSource implements VideoSource {
       });
 
       readable.on("error", (err) => {
-        writeStream.destroy();
-        fsp.unlink(tempFilePath).catch(() => {});
-        reject(err);
+        abortCleanup(err);
       });
 
       writeStream.on("error", (err) => {
-        readable.destroy();
-        fsp.unlink(tempFilePath).catch(() => {});
-        reject(err);
+        abortCleanup(err);
       });
 
       writeStream.on("finish", () => {
-        resolve();
+        if (!rejected) resolve();
       });
 
       readable.pipe(writeStream);

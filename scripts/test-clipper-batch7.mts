@@ -24,6 +24,8 @@ const {
   CLIPPER_UPLOAD_INTENT_DEADLINE_MS,
   CLIPPER_UPLOAD_ID_RELEASE_DELAY_MS,
   EPHEMERAL_UPLOAD_TTL_SECONDS,
+  scoreCandidateHighlights,
+  processClipperJob,
 } = clipper;
 const { createClipperController, readReservation, writeReservation, newUploadId } = client;
 
@@ -587,6 +589,294 @@ async function run() {
     } finally {
       globalThis.fetch = original;
     }
+  });
+
+  // =========================================================================
+  // 8. Highlight Quality & Strictly Non-Overlapping Invariants
+  // =========================================================================
+  const makeSeg = (text: string, start: number, end: number) => {
+    const words = text.split(/\s+/).filter(Boolean);
+    const dur = end - start;
+    return {
+      id: `seg_${start}`,
+      text,
+      start,
+      end,
+      words: words.map((w, i) => ({
+        word: w,
+        start: start + (i / words.length) * dur,
+        end: start + ((i + 1) / words.length) * dur,
+        confidence: 0.95,
+        isInterpolated: false,
+      })),
+    };
+  };
+
+  // 1. One genuine highlight when three clips are requested
+  await test("highlights: 1 genuine highlight when 3 clips are requested -> returns exactly 1 (no blind fillers)", () => {
+    const transcript = {
+      fullText: "Here is the key insight you must know about AI video creation.",
+      language: "en",
+      isVisualOnly: false,
+      segments: [makeSeg("Here is the key insight you must know about AI video creation.", 0, 10)],
+    };
+    const sceneCuts = [{ timestampSeconds: 0, score: 1.0 }];
+    const silenceIntervals = [{ start: 10, end: 60, duration: 50 }];
+
+    const result = scoreCandidateHighlights({
+      sourceDurationSeconds: 60,
+      sceneCuts,
+      transcript,
+      silenceIntervals,
+      requestedClipsCount: 3,
+      targetClipDurationSeconds: 15,
+    });
+
+    assert.equal(result.length, 1, `Must return exactly 1 genuine highlight, got ${result.length}`);
+    assert.equal(result[0].startTime, 0);
+    assert.ok(result[0].score > 0);
+  });
+
+  // 2. Source duration too short to fit the requested number at minimum duration
+  await test("highlights: source duration too short to fit requested count at minDur -> returns fewer", () => {
+    const transcript = {
+      fullText: "Short speech segment spanning twelve seconds.",
+      language: "en",
+      isVisualOnly: false,
+      segments: [makeSeg("Short speech segment spanning twelve seconds.", 0, 12)],
+    };
+    const sceneCuts = [
+      { timestampSeconds: 0, score: 1.0 },
+      { timestampSeconds: 6, score: 1.0 },
+    ];
+
+    const result = scoreCandidateHighlights({
+      sourceDurationSeconds: 12,
+      sceneCuts,
+      transcript,
+      requestedClipsCount: 3,
+      targetClipDurationSeconds: 5,
+    });
+
+    assert.ok(result.length < 3, `Expected fewer than 3 clips for 12s video, got ${result.length}`);
+    assert.ok(result.every((c) => c.durationSeconds >= 5 && c.durationSeconds <= 12));
+  });
+
+  // 3. No meaningful highlight candidates
+  await test("highlights: no meaningful highlight candidates -> returns empty array (no manufactured clips)", () => {
+    const transcript = {
+      fullText: "",
+      language: "en",
+      isVisualOnly: false,
+      segments: [],
+    };
+    const sceneCuts: Array<{ timestampSeconds: number; score: number }> = [];
+
+    const result = scoreCandidateHighlights({
+      sourceDurationSeconds: 60,
+      sceneCuts,
+      transcript,
+      requestedClipsCount: 2,
+      targetClipDurationSeconds: 15,
+    });
+
+    assert.equal(result.length, 0, `Expected 0 clips when no evidence exists, got ${result.length}`);
+  });
+
+  // 4. Strictly non-overlapping output
+  await test("highlights: strictly non-overlapping output (0% overlap across all returned windows)", () => {
+    const transcript = {
+      fullText: "Part one has ideas. Part two has actions. Part three has outcomes. Part four has lessons.",
+      language: "en",
+      isVisualOnly: false,
+      segments: [
+        makeSeg("Part one has ideas.", 0, 15),
+        makeSeg("Part two has actions.", 15, 30),
+        makeSeg("Part three has outcomes.", 30, 45),
+        makeSeg("Part four has lessons.", 45, 60),
+      ],
+    };
+    const sceneCuts = [
+      { timestampSeconds: 0, score: 1.0 },
+      { timestampSeconds: 15, score: 1.0 },
+      { timestampSeconds: 30, score: 1.0 },
+      { timestampSeconds: 45, score: 1.0 },
+    ];
+
+    const result = scoreCandidateHighlights({
+      sourceDurationSeconds: 60,
+      sceneCuts,
+      transcript,
+      requestedClipsCount: 3,
+      targetClipDurationSeconds: 15,
+    });
+
+    assert.equal(result.length, 3);
+    for (let i = 0; i < result.length; i++) {
+      for (let j = i + 1; j < result.length; j++) {
+        const overlapStart = Math.max(result[i].startTime, result[j].startTime);
+        const overlapEnd = Math.min(result[i].endTime, result[j].endTime);
+        const overlapDur = Math.max(0, overlapEnd - overlapStart);
+        assert.equal(overlapDur, 0, `Clips ${i} and ${j} must have strictly 0 overlap, got ${overlapDur}s`);
+      }
+    }
+  });
+
+  // 5. Sufficient genuine candidates still produce the requested number
+  await test("highlights: sufficient genuine candidates produce exactly the requested count", () => {
+    const transcript = {
+      fullText: "Hook question: what is the secret? First rule of progress. Second key mistake to avoid.",
+      language: "en",
+      isVisualOnly: false,
+      segments: [
+        makeSeg("Hook question: what is the secret?", 0, 15),
+        makeSeg("First rule of progress.", 20, 35),
+        makeSeg("Second key mistake to avoid.", 40, 55),
+      ],
+    };
+    const sceneCuts = [
+      { timestampSeconds: 0, score: 1.0 },
+      { timestampSeconds: 20, score: 1.0 },
+      { timestampSeconds: 40, score: 1.0 },
+    ];
+
+    const result = scoreCandidateHighlights({
+      sourceDurationSeconds: 60,
+      sceneCuts,
+      transcript,
+      requestedClipsCount: 3,
+      targetClipDurationSeconds: 15,
+    });
+
+    assert.equal(result.length, 3, `Expected exactly 3 clips, got ${result.length}`);
+  });
+
+  // 6. Visual-only input
+  await test("highlights: visual-only input with scene cuts produces genuine visual pacing clips", () => {
+    const visualTranscript = {
+      fullText: "",
+      language: "und",
+      isVisualOnly: true,
+      segments: [],
+    };
+    const sceneCuts = [
+      { timestampSeconds: 0, score: 1.0 },
+      { timestampSeconds: 10, score: 0.9 },
+      { timestampSeconds: 25, score: 0.9 },
+    ];
+
+    const result = scoreCandidateHighlights({
+      sourceDurationSeconds: 40,
+      sceneCuts,
+      transcript: visualTranscript,
+      requestedClipsCount: 2,
+      targetClipDurationSeconds: 12,
+    });
+
+    assert.equal(result.length, 2);
+    assert.ok(result[0].reason.includes("Visual pacing"));
+    assert.ok(result[0].title.includes("Visual Scene"));
+    assert.equal(result[0].words.length, 0);
+  });
+
+  // 7. Failure results in exactly one full refund
+  await test("accounting: insufficient highlights fails worker and triggers exactly one full refund", async () => {
+    let refundCount = 0;
+    let refundedJobId = "";
+
+    const fakeLifecycle = {
+      markStarted: async () => true,
+      claimLease: async ({ leaseDurationMs }: { leaseDurationMs: number }) => ({
+        claimed: true,
+        token: "tok_test123",
+        expiresAt: new Date(Date.now() + leaseDurationMs),
+      }),
+      renewLease: async () => ({ renewed: true, validUntil: new Date(Date.now() + 60_000) }),
+      failFenced: async (args: { jobId: string; reason: string }) => {
+        refundCount++;
+        refundedJobId = args.jobId;
+        return { settled: true };
+      },
+      complete: async () => ({ assetIds: [] }),
+      recordCleanup: async () => {},
+    };
+
+    const fakeStorage = {
+      getStream: async () => ({ stream: null as any, contentLength: 100 }),
+      putStream: async () => ({ sizeBytes: 100 }),
+      delete: async () => {},
+    };
+
+    const outcome = await processClipperJob(
+      {
+        job: {
+          id: "job_insufficient01",
+          userId: USER,
+          settings: {
+            requestedClipsCount: 3,
+            targetAspectRatio: "9:16",
+            targetFraming: "center_crop",
+            burnSubtitles: false,
+            isVisualOnly: false,
+            sourceType: "upload",
+            sourceKey: KEY,
+          } as any,
+        },
+        source: {
+          materialize: async () => ({ localPath: "dummy.mp4", cleanup: async () => {} }),
+          fileSizeBytes: 1000,
+        } as any,
+        // Only 1 highlight produced when 3 were required
+        planClips: async () => [
+          {
+            id: "h1",
+            title: "Only One",
+            startTime: 0,
+            endTime: 10,
+            durationSeconds: 10,
+            score: 50,
+            reason: "Single cut",
+            transcriptText: "",
+            words: [],
+            aspectRatio: "9:16",
+            framing: "center_crop",
+          },
+        ],
+      },
+      {
+        engine: {
+          name: "MockEngine",
+          extractMetadata: async () => ({
+            durationSeconds: 60,
+            width: 1920,
+            height: 1080,
+            hasAudio: true,
+            fps: 30,
+            videoCodec: "h264",
+            audioCodec: "aac",
+            sampleRate: 48000,
+            channels: 2,
+            bitrate: 2000000,
+          }),
+          renderClip: async () => ({
+            outputFile: "dummy.mp4",
+            durationSeconds: 10,
+            width: 1080,
+            height: 1920,
+            hasAudio: true,
+            sizeBytes: 1000,
+          }),
+        } as any,
+        lifecycle: fakeLifecycle as any,
+        storage: fakeStorage as any,
+        logger: { warn: () => {}, error: () => {} },
+      },
+    );
+
+    assert.equal(outcome.status, "failed");
+    assert.equal(outcome.code, "INSUFFICIENT_HIGHLIGHTS");
+    assert.equal(refundCount, 1, `Must perform exactly 1 refund, got ${refundCount}`);
+    assert.equal(refundedJobId, "job_insufficient01");
   });
 
   console.log(`\n  Tests Passed: ${passed}\n  Tests Failed: ${failed}\n`);

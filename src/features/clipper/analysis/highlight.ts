@@ -286,16 +286,22 @@ export function scoreCandidateHighlights(params: HighlightScoringParams): Candid
       const sceneCutsInWindow = sceneCuts.filter(
         (c) => c.timestampSeconds >= startTime && c.timestampSeconds <= endTime,
       );
+      if (sceneCutsInWindow.length === 0 && sceneScore === 0) {
+        // No scene cuts or boundary alignment in this window — no visual pacing evidence.
+        continue;
+      }
       const visualScore = Math.min(40.0, sceneCutsInWindow.length * 10.0) + sceneScore;
       const positionBonus = startTime < sourceDurationSeconds * 0.3 ? 15.0 : 5.0;
-      const finalScore = Math.round(visualScore + positionBonus);
+      const silencePenalty = calculateSilencePenalty(startTime, endTime, silenceIntervals);
+      const finalScore = Math.max(0, Math.round(visualScore + positionBonus + silencePenalty));
+      if (finalScore <= 0) continue;
 
       candidateWindows.push({
         startTime,
         endTime,
         durationSeconds,
         score: finalScore,
-        reason: `Visual pacing with ${sceneCutsInWindow.length} scene cuts and strong transition alignment.`,
+        reason: `Visual pacing with ${sceneCutsInWindow.length} scene cuts and transition alignment.`,
         title: generateHighlightTitle(candidateWindows.length, [], "", true),
         transcriptText: "",
         words: [],
@@ -312,6 +318,11 @@ export function scoreCandidateHighlights(params: HighlightScoringParams): Candid
           windowWords.push(w);
         }
       }
+    }
+
+    // Must have genuine speech or scene-alignment evidence
+    if (windowWords.length === 0 && sceneScore === 0) {
+      continue;
     }
 
     // 2. Speech density
@@ -354,24 +365,20 @@ export function scoreCandidateHighlights(params: HighlightScoringParams): Candid
   // Sort candidate windows by score descending
   candidateWindows.sort((a, b) => b.score - a.score);
 
-  // Greedy non-overlapping selection
+  // Greedy strictly non-overlapping selection
   const selected: CandidateHighlight[] = [];
 
   for (const cand of candidateWindows) {
     if (selected.length >= clipCount) break;
 
-    // Check overlap with already selected clips (allow maximum 20% overlap)
+    // Strictly non-overlapping selection: any intersection between windows is rejected
     let overlaps = false;
     for (const existing of selected) {
       const overlapStart = Math.max(cand.startTime, existing.startTime);
       const overlapEnd = Math.min(cand.endTime, existing.endTime);
       if (overlapEnd > overlapStart) {
-        const overlapDuration = overlapEnd - overlapStart;
-        const minDuration = Math.min(cand.durationSeconds, existing.durationSeconds);
-        if (overlapDuration / minDuration > 0.2) {
-          overlaps = true;
-          break;
-        }
+        overlaps = true;
+        break;
       }
     }
 
@@ -398,65 +405,6 @@ export function scoreCandidateHighlights(params: HighlightScoringParams): Candid
         aspectRatio: targetAspectRatio,
         framing: targetFraming,
       });
-    }
-  }
-
-  // Fallback: If no candidate was found (e.g. video shorter than minDur), create a single safe window
-  if (selected.length === 0) {
-    const end = Math.min(sourceDurationSeconds, targetDur);
-    selected.push({
-      id: "highlight-1",
-      title: "Clip #1",
-      startTime: 0,
-      endTime: end,
-      durationSeconds: Math.round(end * 100) / 100,
-      score: 50,
-      reason: "Default full video segment",
-      transcriptText: "",
-      words: [],
-      aspectRatio: targetAspectRatio,
-      framing: targetFraming,
-    });
-  }
-
-  // Supplementary filler: if fewer non-overlapping windows were selected than requested,
-  // search available timeline gaps for additional non-overlapping segments.
-  if (selected.length < clipCount && sourceDurationSeconds >= minDur) {
-    for (let t = 0; t + minDur <= sourceDurationSeconds && selected.length < clipCount; t += 1) {
-      const candStart = t;
-      const candEnd = Math.min(sourceDurationSeconds, t + targetDur);
-      if (candEnd - candStart < minDur) continue;
-
-      let overlaps = false;
-      for (const existing of selected) {
-        const overlapStart = Math.max(candStart, existing.startTime);
-        const overlapEnd = Math.min(candEnd, existing.endTime);
-        if (overlapEnd > overlapStart) {
-          const overlapDuration = overlapEnd - overlapStart;
-          const minD = Math.min(candEnd - candStart, existing.durationSeconds);
-          if (overlapDuration / minD > 0.2) {
-            overlaps = true;
-            break;
-          }
-        }
-      }
-
-      if (!overlaps) {
-        selected.push({
-          id: `highlight-${selected.length + 1}`,
-          title: `Clip #${selected.length + 1}`,
-          startTime: candStart,
-          endTime: candEnd,
-          durationSeconds: Math.round((candEnd - candStart) * 100) / 100,
-          score: 30,
-          reason: "Timeline coverage for requested clip count",
-          transcriptText: "",
-          words: [],
-          aspectRatio: targetAspectRatio,
-          framing: targetFraming,
-        });
-        t += Math.max(1, Math.floor((candEnd - candStart) * 0.8));
-      }
     }
   }
 

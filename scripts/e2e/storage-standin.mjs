@@ -96,6 +96,12 @@ const server = http.createServer(async (req, res) => {
     const p = decodeURIComponent(url.pathname);
 
     if (p === "/__debug/objects") return send(res, 200, [...meta.entries()].map(([k, v]) => ({ key: k, ...v })));
+    if (p === "/__debug/reset" && req.method === "POST") {
+      meta.clear();
+      fs.rmSync(ROOT, { recursive: true, force: true });
+      fs.mkdirSync(ROOT, { recursive: true });
+      return send(res, 200, { ok: true });
+    }
     if (p === "/__debug/stats") return send(res, 200, stats);
     if (p === "/__debug/expire-tokens" && req.method === "POST") {
       tokenEpoch++;
