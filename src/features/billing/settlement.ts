@@ -155,6 +155,71 @@ export async function settlePaymentOrder(
     };
   }
 
+  // 4. Enforce Immutable Server-Side Snapshot Consistency
+  const snapshot = order.packageSnapshot as Record<string, unknown> | null;
+  if (snapshot && typeof snapshot === "object") {
+    const snapshotAmountMinor = typeof snapshot.amountMinor === "number" ? snapshot.amountMinor : undefined;
+    const snapshotCurrency = typeof snapshot.currency === "string" ? snapshot.currency : undefined;
+    const snapshotCredits = typeof snapshot.creditsAllocated === "number" ? snapshot.creditsAllocated : undefined;
+
+    if (snapshotAmountMinor !== undefined && snapshotAmountMinor !== order.totalAmountMinor) {
+      await flagOrderForReview(
+        client,
+        order.id,
+        "SNAPSHOT_AMOUNT_MISMATCH",
+        `Order totalAmountMinor ${order.totalAmountMinor} does not match snapshot amount ${snapshotAmountMinor}`,
+        input,
+      );
+      return {
+        success: false,
+        orderId: order.id,
+        status: PaymentOrderStatus.NEEDS_REVIEW,
+        creditsAllocated: 0,
+        requiresManualReview: true,
+        reviewReason: "SNAPSHOT_AMOUNT_MISMATCH",
+        error: "Server-side package snapshot amount mismatch detected",
+      };
+    }
+
+    if (snapshotCurrency && snapshotCurrency !== order.currency) {
+      await flagOrderForReview(
+        client,
+        order.id,
+        "SNAPSHOT_CURRENCY_MISMATCH",
+        `Order currency ${order.currency} does not match snapshot currency ${snapshotCurrency}`,
+        input,
+      );
+      return {
+        success: false,
+        orderId: order.id,
+        status: PaymentOrderStatus.NEEDS_REVIEW,
+        creditsAllocated: 0,
+        requiresManualReview: true,
+        reviewReason: "SNAPSHOT_CURRENCY_MISMATCH",
+        error: "Server-side package snapshot currency mismatch detected",
+      };
+    }
+
+    if (snapshotCredits !== undefined && snapshotCredits !== order.creditsAllocated) {
+      await flagOrderForReview(
+        client,
+        order.id,
+        "SNAPSHOT_CREDITS_MISMATCH",
+        `Order creditsAllocated ${order.creditsAllocated} does not match snapshot credits ${snapshotCredits}`,
+        input,
+      );
+      return {
+        success: false,
+        orderId: order.id,
+        status: PaymentOrderStatus.NEEDS_REVIEW,
+        creditsAllocated: 0,
+        requiresManualReview: true,
+        reviewReason: "SNAPSHOT_CREDITS_MISMATCH",
+        error: "Server-side package snapshot credits mismatch detected",
+      };
+    }
+  }
+
   // 4. Enforce Gateway Order ID Consistency if both are known
   if (
     input.gatewayOrderId &&

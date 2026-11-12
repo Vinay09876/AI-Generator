@@ -64,10 +64,13 @@ export class MockPaymentGatewayEngine implements PaymentGatewayEngine {
   public readonly gateway: PaymentGateway = "mock";
   public readonly capabilities: GatewayCapabilities;
 
+  private static readonly globalOrdersByReceipt = new Map<string, MockOrderRecord>();
+  private static readonly globalOrdersByGatewayId = new Map<string, MockOrderRecord>();
+
   private readonly secretKey: string;
   private readonly webhookSecret: string;
-  private readonly ordersByReceipt = new Map<string, MockOrderRecord>();
-  private readonly ordersByGatewayId = new Map<string, MockOrderRecord>();
+  private readonly ordersByReceipt: Map<string, MockOrderRecord>;
+  private readonly ordersByGatewayId: Map<string, MockOrderRecord>;
 
   // Simulation controls for testing edge cases
   private nextTimeoutConfig?: { persistOrder: boolean; message?: string };
@@ -84,8 +87,22 @@ export class MockPaymentGatewayEngine implements PaymentGatewayEngine {
       supportsRefunds: true,
     };
 
-    this.secretKey = options.secretKey ?? `mock_sec_${randomBytes(16).toString("hex")}`;
-    this.webhookSecret = options.webhookSecret ?? `mock_whsec_${randomBytes(16).toString("hex")}`;
+    this.secretKey =
+      options.secretKey ??
+      process.env.MOCK_PAYMENT_SECRET ??
+      "mock_secret_dev_key";
+    this.webhookSecret =
+      options.webhookSecret ??
+      process.env.MOCK_WEBHOOK_SECRET ??
+      "mock_webhook_secret_dev";
+
+    this.ordersByReceipt = MockPaymentGatewayEngine.globalOrdersByReceipt;
+    this.ordersByGatewayId = MockPaymentGatewayEngine.globalOrdersByGatewayId;
+  }
+
+  public static clearMockOrders(): void {
+    MockPaymentGatewayEngine.globalOrdersByReceipt.clear();
+    MockPaymentGatewayEngine.globalOrdersByGatewayId.clear();
   }
 
   /**

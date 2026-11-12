@@ -1587,6 +1587,52 @@ model PaymentWebhookEvent {
     - Database integration tests were executed against an in-memory transactional mock implementing PostgreSQL row locking, ACID rollbacks, and unique constraint semantics. No local PostgreSQL daemon was active on localhost:5432.
     - Public payment routes and live webhook endpoints remain deferred to Batch 3.
 - **Batch 3**: Shared Settlement Service, Verification APIs & Durable Webhook Ingestion.
+  - **Status**: ✅ Complete & Verified (Includes Payment Security Hardening).
+  - **Deliverables**:
+    - `src/features/billing/packages.ts`: Server-side package catalog and pricing snapshot engine.
+      - Enforces that all financial parameters (`creditsAllocated`, `amountMinor`, `currency`, `isTaxInclusive`, `taxRatePercent`) are resolved exclusively on the server side. Client-supplied amounts or credit quantities are never accepted or trusted.
+      - Clearly marked provisional development/test catalog (`PROVISIONAL_SERVER_CREDIT_PACKAGES`: `PKG_STARTER`, `PKG_CREATOR`, `PKG_PRO`, `PKG_USD_TEST`, `PKG_DISABLED_TEST`). Final customer pricing remains unfinalized pending business authorization.
+      - Rejects unknown package IDs with HTTP 400 `UNKNOWN_PACKAGE`, disabled packages with HTTP 400 `PACKAGE_DISABLED`, and malformed/empty IDs with HTTP 400 `INVALID_PACKAGE`.
+      - Constructs immutable `packageSnapshot` (`PackagePricingSnapshot`) capturing package ID, name, credits, minor units, tax status, resolution timestamp, and catalog provenance.
+    - `src/features/billing/api/orders-handler.ts`: Core payment order creation API logic.
+      - Accepts only valid `packageId` and optional non-financial metadata from the client. Ignores/strips any client-supplied financial values.
+      - Enforces session authentication via NextAuth/Auth.js (unauthenticated callers receive HTTP 401).
+      - CSRF origin validation against `resolveTrustedOrigins()` in production (untrusted origins receive HTTP 403 `FORBIDDEN`).
+      - Sliding window rate limiting (10 orders/min per user; excess requests receive HTTP 429 `RATE_LIMITED` with `Retry-After`).
+      - Production environment fail-closed isolation: requesting `gateway = "mock"` in production fails closed with HTTP 403 `GATEWAY_DISALLOWED`.
+      - Creates persistent `PaymentOrder` in `PENDING` status with server-resolved pricing and immutable snapshot, initiates gateway order attempt via `MockPaymentGatewayEngine`, binds `gatewayOrderId`, records `PaymentAttempt` in status `INITIATED`, and updates order to `CREATED`.
+    - `src/features/billing/api/verify-handler.ts`: Browser checkout verification API handler.
+      - Enforces caller session authentication and order ownership: callers can only verify orders belonging to their own `userId` (cross-user verification attempts fail closed with HTTP 403 `FORBIDDEN`).
+      - Sliding window rate limiting (20 verification attempts/min per user).
+      - Cryptographic HMAC-SHA256 signature verification over `${gatewayOrderId}|${gatewayPaymentId}` using timing-safe comparison; tampered signatures or altered payment IDs are rejected with HTTP 400 `INVALID_SIGNATURE`.
+      - Resolves verified gateway payment amount and currency from gateway record (`lookupOrderByGatewayId`) and delegates directly to shared `settlePaymentOrder`.
+      - Idempotent re-verification: subsequent calls for already-settled orders return HTTP 200 with `{ alreadySettled: true }` and current balance without double crediting.
+    - `src/features/billing/settlement.ts`: Settlement lifecycle coordinator hardened with snapshot integrity verification:
+      - Validates actual gateway capture amount and currency against both the order columns and the immutable `packageSnapshot`.
+      - Any discrepancies trigger immediate escalation to `NEEDS_REVIEW` (`AMOUNT_MISMATCH`, `CURRENCY_MISMATCH`, `SNAPSHOT_AMOUNT_MISMATCH`, `SNAPSHOT_CREDITS_MISMATCH`), allocating 0 credits and preventing undercharge attacks.
+    - `src/features/billing/api/webhook-handler.ts`: Payment gateway webhook ingestion handler.
+      - Reads raw request body as binary/text buffer before JSON parsing.
+      - Verifies raw-body HMAC-SHA256 signature using constant-time `timingSafeEqual` (`verifyRawBodyHmacSha256`). Missing signatures or forged payloads are rejected with HTTP 401 `UNAUTHORIZED`.
+      - IP sliding window rate limiting (120 webhook deliveries/min per IP; excess deliveries receive HTTP 429).
+      - Fast-ACK guarantee: Valid incoming events are persisted durably in `PaymentWebhookEvent` and acknowledged immediately with HTTP 200 `{ received: true }`.
+      - Webhook deduplication: Duplicate delivery of an already-recorded `[gateway, eventId]` is acknowledged with HTTP 200 `{ received: true, duplicate: true }` without duplicate processing or queue re-execution.
+    - `src/features/billing/api/processor.ts`: Background event processing engine and worker lifecycle.
+      - Handles `payment.captured` / `order.paid` events and dispatches to `settlePaymentOrder` with verified gateway payment amount and currency.
+      - Handles `payment.failed` events and dispatches to `recordPaymentFailure` (transitions order to `FAILED`).
+      - Unhandled/unknown event types (e.g. `refund.speed_changed`) are marked `PROCESSED` without blocking or erroring the queue.
+      - Implements `processPendingPaymentWebhookBatch` with atomic lease claiming, lease expiry recovery for crashed workers, and bounded retry increments escalating to terminal `FAILED`.
+    - Thin Next.js 16.4 route handlers:
+      - `src/app/api/billing/orders/route.ts`: Thin `POST` route delegating to `handleCreateOrderRequest`.
+      - `src/app/api/billing/verify/route.ts`: Thin `POST` route delegating to `handleVerifyPaymentRequest`.
+      - `src/app/api/webhooks/payments/razorpay/route.ts`: Thin `POST` route delegating to `handleRazorpayWebhookRequest`.
+      - All route handlers export `export const dynamic = "force-dynamic"` to guarantee dynamic execution.
+    - `src/features/billing/index.ts`: Barrel exports updated for `packages`, `processor`, `orders-handler`, `verify-handler`, and `webhook-handler`.
+    - `scripts/test-billing-batch3.mts`: 94/94 tests passing across raw-body HMAC verification, orders handler rules, browser verification cryptographic safety, webhook Fast-ACK and deduplication, processor and worker lifecycle, end-to-end convergence, and financial tamper resistance (forged credits, forged amounts, forged currency, forged snapshots, webhook undercharging, and snapshot discrepancy escalation).
+  - **Decisions & Limitations Recorded**:
+    - ₹0 spend strictly maintained; zero third-party payment API calls or credentials.
+    - Mock gateway is strictly isolated to development and automated test suites; production fails closed with HTTP 403 `GATEWAY_DISALLOWED`.
+    - In accordance with Next.js 15+ request storage boundaries, handlers support optional dependency injection (`BillingHandlerDeps`) for authenticated user resolution, database client injection, and package catalog configuration during standalone unit/integration test runs.
+    - Live Razorpay credentials and webhook signature verification for production endpoints remain disabled pending official merchant verification and live credential provisioning.
 - **Batch 4**: Unified Dashboard Navigation, Global Active Job Ribbon & Cross-Tool Media History.
 - **Batch 5**: Credit Store Modal, Detailed Transaction Ledger View & Tax Invoice Receipt UI.
 - **Batch 6**: Legal Policy Updates, Operator Payment Reconciliation Tooling & Full Regression.
