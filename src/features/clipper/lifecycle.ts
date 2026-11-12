@@ -787,6 +787,62 @@ export async function cancelClipperJob(
   }, TX_OPTIONS);
 }
 
+/** Public failure code recorded when a user cancels a queued job (parsed by job-view). */
+export const USER_CANCELLED_CODE = "USER_CANCELLED";
+
+export type CancelQueuedClipperJobResult =
+  | { settled: true; refund: Awaited<ReturnType<typeof refundJobDebit>>; settings: unknown }
+  | { settled: false; currentStatus: string | null };
+
+/**
+ * User cancellation of a QUEUED clip job (Batch 6). Owner-checked, atomic and lease-aware:
+ *
+ *   UPDATE ... SET status = CANCELLED
+ *   WHERE id = ? AND userId = ? AND type = VIDEO_CLIP
+ *     AND status = PENDING AND startedAt IS NULL AND ingestionToken IS NULL
+ *
+ * The worker's pickup (markClipperJobStarted: PENDING -> PROCESSING) is a conditional UPDATE on the
+ * same row, so PostgreSQL row locking gives exactly one winner:
+ *   - cancel wins: the worker's markStarted matches 0 rows and its lease claim (which requires
+ *     PROCESSING) fails, so it never reads, renders, settles or deletes anything;
+ *   - worker wins: this UPDATE matches 0 rows; nothing is refunded or deleted here.
+ * The refund runs in the same transaction through the idempotent ledger (refundJobDebit), so a
+ * duplicate cancel can never refund twice. Unlike cancelClipperJob, PROCESSING jobs are never touched.
+ */
+export async function cancelQueuedClipperJobForUser(
+  params: { jobId: string; userId: string },
+  db: typeof prisma = prisma,
+): Promise<CancelQueuedClipperJobResult> {
+  const { jobId, userId } = params;
+  const reason = `Cancelled by the user before processing started (${USER_CANCELLED_CODE})`;
+  return db.$transaction(async (tx) => {
+    const rows = await tx.$queryRaw<{ id: string; settings: unknown }[]>`
+      UPDATE "GenerationJob"
+      SET "status" = 'CANCELLED',
+          "errorMessage" = ${reason},
+          "ingestionLeaseExpiresAt" = NULL,
+          "completedAt" = now(),
+          "updatedAt" = now()
+      WHERE "id" = ${jobId}
+        AND "userId" = ${userId}
+        AND "type"::text = 'VIDEO_CLIP'
+        AND "status"::text = 'PENDING'
+        AND "startedAt" IS NULL
+        AND "ingestionToken" IS NULL
+      RETURNING "id", "settings"`;
+
+    if (rows.length === 0) {
+      const current = await tx.$queryRaw<{ status: string }[]>`
+        SELECT "status"::text AS "status" FROM "GenerationJob"
+        WHERE "id" = ${jobId} AND "userId" = ${userId} AND "type"::text = 'VIDEO_CLIP'`;
+      return { settled: false as const, currentStatus: current[0]?.status ?? null };
+    }
+
+    const refund = await refundJobDebit(tx, { jobId, description: "Refund: video clipping cancelled before processing" });
+    return { settled: true as const, refund, settings: rows[0].settings };
+  }, TX_OPTIONS);
+}
+
 export interface ReconcileStaleClipperJobsResult {
   checked: number;
   settled: number;

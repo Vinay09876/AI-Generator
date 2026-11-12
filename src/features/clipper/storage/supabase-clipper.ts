@@ -22,8 +22,17 @@ type BucketApi = {
   upload(key: string, body: unknown, options: Record<string, unknown>): Promise<{ error: unknown }>;
   createSignedUploadUrl(key: string, options?: { upsert?: boolean }): Promise<{ data: { signedUrl: string; path: string; token: string } | null; error: unknown }>;
   info(key: string): Promise<{ data: any | null; error: unknown }>;
-  createSignedUrl(key: string, expiresIn: number): Promise<{ data: { signedUrl: string } | null; error: unknown }>;
+  createSignedUrl(key: string, expiresIn: number, options?: { download?: string | boolean }): Promise<{ data: { signedUrl: string } | null; error: unknown }>;
 };
+
+/** Fire-and-forget body release (see readPrefix: awaiting cancel can hang on tee'd streams). */
+function releaseBody(body: ReadableStream<Uint8Array> | null | undefined): void {
+  if (!body) return;
+  void body.cancel().catch(() => {});
+}
+function releaseReader(reader: ReadableStreamDefaultReader<Uint8Array>): void {
+  void reader.cancel().catch(() => {});
+}
 
 class SupabaseStorageOpError extends Error {
   constructor(public readonly code: string, message: string, public readonly status: number | null = null) {
@@ -121,8 +130,10 @@ export class SupabaseClipperStorage implements ClipperStorage {
     };
   }
 
-  async createSignedUrl(key: string, expiresInSeconds: number): Promise<string> {
-    const { data, error } = await this.api().createSignedUrl(key, expiresInSeconds);
+  async createSignedUrl(key: string, expiresInSeconds: number, options?: { download?: string }): Promise<string> {
+    const { data, error } = options?.download
+      ? await this.api().createSignedUrl(key, expiresInSeconds, { download: options.download })
+      : await this.api().createSignedUrl(key, expiresInSeconds);
     if (error || !data?.signedUrl) throw new SupabaseStorageOpError("SIGN_FAILED", "Could not sign URL.", statusOf(error));
     return this.assertOwnOrigin(data.signedUrl);
   }
@@ -130,9 +141,10 @@ export class SupabaseClipperStorage implements ClipperStorage {
   async readPrefix(key: string, length: number): Promise<Buffer> {
     if (!Number.isInteger(length) || length <= 0 || length > 4096) throw new RangeError("readPrefix length out of range");
     const url = await this.createSignedUrl(key, 60);
-    const res = await fetch(url, { headers: { Range: `bytes=0-${length - 1}` }, redirect: "error" });
+    // cache: "no-store" opts out of Next.js's patched-fetch data cache (which tees the body).
+    const res = await fetch(url, { headers: { Range: `bytes=0-${length - 1}` }, redirect: "error", cache: "no-store" });
     if (res.status !== 206 && res.status !== 200) {
-      await res.body?.cancel().catch(() => {});
+      releaseBody(res.body);
       throw new SupabaseStorageOpError("RANGE_READ_FAILED", "Could not read object header.", res.status);
     }
     // Read at most `length` bytes even if the server ignored the Range header.
@@ -145,20 +157,23 @@ export class SupabaseClipperStorage implements ClipperStorage {
       chunks.push(value);
       total += value.byteLength;
     }
-    await reader.cancel().catch(() => {});
+    // Never AWAIT cancellation: on a tee'd body (Next.js patched fetch) a branch's cancel promise
+    // only settles once every branch is cancelled, which hung verification until the 5 s timeout
+    // (found by the Batch 7 isolated browser E2E).
+    releaseReader(reader);
     return Buffer.concat(chunks).subarray(0, length);
   }
 
   async openDownloadStream(key: string, maxBytes: number): Promise<Readable> {
     const url = await this.createSignedUrl(key, 300);
-    const res = await fetch(url, { redirect: "error" });
+    const res = await fetch(url, { redirect: "error", cache: "no-store" });
     if (!res.ok || !res.body) {
-      await res.body?.cancel().catch(() => {});
+      releaseBody(res.body);
       throw new SupabaseStorageOpError("DOWNLOAD_FAILED", "Source download failed.", res.status);
     }
     const declared = Number(res.headers.get("content-length"));
     if (Number.isFinite(declared) && declared > maxBytes) {
-      await res.body.cancel().catch(() => {});
+      releaseBody(res.body);
       throw new SupabaseStorageOpError("TOO_LARGE", "Source exceeds the size limit.");
     }
     let seen = 0;

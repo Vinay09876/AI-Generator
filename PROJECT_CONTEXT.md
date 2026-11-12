@@ -32,7 +32,7 @@ AI Image & Video Generator roadmap:
 | 8 | AI Video Generator | ✅ Complete — Batch 0 (Feasibility & Architecture) complete; Batch 1 (Domain config, pricing, types, MockVideoProvider, MP4 fixture & Ed25519 webhook boundary; 83 tests) complete; Batch 2A (DB schema, migrations & lifecycle state machine; 70 tests) complete; Batch 2B (Streaming storage ingestion, SSRF IP pinning, thumbnail boundary & signed URLs; 116 tests) complete; Batch 3 (Fal.ai provider adapter, Ed25519 webhook verification, durable persistence, concurrency-safe leases, cron reconciliation & 15m timeout sweep; 161 tests) complete; Batch 4 (Generation APIs & client synchronization layer, including cryptographically bound delayed webhook correlation token verification; 103 tests) complete; Batch 5 (Premium AI Video Generator UI at `/ai-video`, cinematic player, gallery & component tests; 74 tests) complete; Batch 6 (Legal Policy Reconciliation, UI Review, Full Regression & Release Readiness; 20 legal tests, 1,027 total offline regression tests passing) complete. Live Fal.ai E2E trial deferred pending explicit authorization. |
 | 8.1 | Staging Readiness Assessment | ✅ Complete — Comprehensive staging readiness audit across secrets, migrations, Supabase storage, Fal.ai ingress, cron scheduling, operator tooling, diagnostics, offline/live test boundaries, and 7-phase staging setup checklist. |
 | 8.2 | Zero-Cost Operational Preparation | ✅ Complete — Production Operator CLI (`scripts/resolve-ambiguous-job.mts`) with physical storage verification, Account Deletion SOP (`docs/runbooks/account-deletion-sop.md`), Staging Runbook (`docs/runbooks/staging-setup-runbook.md`), 74 CLI safety tests, 1,196 passing offline tests across 15 suites. Commit `c6b73f3` (pushed). |
-| 9 | AI Video Clipper | 🔄 In Progress — Batch 0 approved; Batch 1 (Domain Config, VideoSource Abstraction, Types, Validation, Storage Keys & Mock Engine; 43 tests) complete; Batch 2 (Database Schema Reusability, Job Lifecycle State Machine, Dynamic Multi-Clip Credit Accounting, Ingestion Leases, Terminal Guards, Idempotent Refunds, Decoupled Cleanup & Lease Fencing; 25 tests) complete; Batch 3 (Subprocess Runner & Security Boundary, FFprobe Metadata Extraction, Audio Demuxing & Silence Detection, Scene Cut Detection, Multi-Format Whisper Parser with Interpolation Safeguard, Deterministic Highlight Scoring, High-Contrast ASS/SRT Karaoke Generator; 34 tests) complete; Batch 4 (FFmpeg filter graphs & argument builder, output validation, WebP poster frames, FfmpegClipperEngine, lease-fenced worker orchestration, streaming output ingestion, orphan/source cleanup & retry sweep; 69 tests + 6 lifecycle tests, 3 real-FFmpeg tests SKIPPED — no FFmpeg on dev machine, real encode NOT verified) complete; Batch 5 (direct-to-storage upload workflow with fail-closed, lock-serialised quota; clip job API & job view; worker process with job pickup and graceful/hard shutdown; scene & pacing planner — speech analysis/captions explicitly unavailable; maintenance cron for stale jobs, cleanup retries and abandoned uploads; browser client controller; 73 tests + 4 lifecycle tests) complete. Batches 1–5 uncommitted. |
+| 9 | AI Video Clipper | 🔄 In Progress — Batch 0 approved; Batch 1 (Domain Config, VideoSource Abstraction, Types, Validation, Storage Keys & Mock Engine; 43 tests) complete; Batch 2 (Database Schema Reusability, Job Lifecycle State Machine, Dynamic Multi-Clip Credit Accounting, Ingestion Leases, Terminal Guards, Idempotent Refunds, Decoupled Cleanup & Lease Fencing; 25 tests) complete; Batch 3 (Subprocess Runner & Security Boundary, FFprobe Metadata Extraction, Audio Demuxing & Silence Detection, Scene Cut Detection, Multi-Format Whisper Parser with Interpolation Safeguard, Deterministic Highlight Scoring, High-Contrast ASS/SRT Karaoke Generator; 34 tests) complete; Batch 4 (FFmpeg filter graphs & argument builder, output validation, WebP poster frames, FfmpegClipperEngine, lease-fenced worker orchestration, streaming output ingestion, orphan/source cleanup & retry sweep; 69 tests + 6 lifecycle tests, 3 real-FFmpeg tests SKIPPED — no FFmpeg on dev machine, real encode NOT verified) complete; Batch 5 (direct-to-storage upload workflow with fail-closed, lock-serialised quota; clip job API & job view; worker process with job pickup and graceful/hard shutdown; scene & pacing planner — speech analysis/captions explicitly unavailable; maintenance cron for stale jobs, cleanup retries and abandoned uploads; browser client controller; 73 tests + 4 lifecycle tests) complete. Batches 1–5 + Stage 8 cron fix committed and pushed as `4ed067f`. Batch 6 (`/video-clipper` UI, operator submission switch, queued-job cancel + refund, download redirect, upload-reservation recovery; 35 backend + 40 UI + 7 lifecycle tests) implemented 2026-11-11, uncommitted, awaiting review — see §16.13. |
 
 ## 3. Tech stack
 
@@ -1200,3 +1200,117 @@ Batch 5 was accepted on 2026-11-11. Before the commit, the owner asked for this 
   - Mutation check: restoring fail-open causes 9 failures.
 - **Regression:** video-webhooks 161, video-adapters 116, video-lifecycle 70, video-storage 116, video-api 103 and video-ui 74, all passing.
 - **Static checks:** `npx tsc --noEmit` is clean; `npm run build` passes; `git diff --check` is clean.
+
+### 16.13 Stage 9 Batch 6 — Video Clipper UI & editor integration (2026-11-11, uncommitted, awaiting review)
+
+Owner decisions (all approved): (1) `CLIPPER_SUBMISSIONS_ENABLED` operator switch; (2) user cancel + refund for QUEUED jobs only; (3) secure download redirect; (4) clip length shown as fixed information; (5) Fix A for upload reservations.
+
+**UI (`/video-clipper`, replaces the placeholder)**
+- Server page loads, owner-scoped and read-only: switch state, limits, analysis capabilities, balance, today's usage, the active clip job, and the last 6 completed jobs with signed links (`loadClipperPageData` in `service.ts`).
+- Client: `src/components/video-clipper/`:
+  - `video-clipper.tsx` lays out a main column (status, results, source) and a sticky settings column on desktop; it becomes a single column on mobile.
+  - Upload: dropzone, and a local preview from an object URL (nothing is uploaded until Generate).
+  - Local checks (format, 50 MB, 15–300 s, resolution) run before any reservation.
+  - Settings: aspect ratio, framing and clip count use native radio groups.
+  - Clip length is fixed text: about 30 s, between 5 and 60 s, with no control.
+  - Cost and daily-usage summary.
+  - The analysis notice is always shown: scene and pacing only; speech and captions unavailable; original audio kept.
+  - Status panel with an aria-live region:
+    - the only percentage is real upload progress;
+    - "Queued, waiting for a worker" escalates to "Not picked up yet" after 2 minutes;
+    - "Processing" appears only once the server reports PROCESSING.
+  - Results and recent clips use native `<video>`. Expired signed links are refetched (throttled to once per 20 s per job).
+  - Downloads go through the same-origin route.
+- The Stage 8 `VideoPlayer` was **not** reused: its download anchor uses the cross-origin signed URL, where browsers ignore `download`. Stage 8 code is unchanged.
+
+**Operator switch `CLIPPER_SUBMISSIONS_ENABLED`** (`resolveClipperSubmissionsSwitch`)
+- **Production:** ON only for exactly `true` (trimmed, case-insensitive). Missing, blank or any other value is OFF.
+- **Development:** missing is ON; `false` is OFF; anything else is OFF.
+- When OFF:
+  - new upload reservations and new jobs get 503 `CLIPPER_UNAVAILABLE` before any storage access, lock or debit;
+  - an existing Idempotency-Key replay still returns its job;
+  - status, verify, discard, cancel and download keep working.
+- The client treats this 503 as definitive (no retries) and releases the upload.
+- UI wording: "Submissions are open" means only that new jobs are accepted. The page states it cannot tell whether a worker is running, and never claims the worker is online.
+
+**Queued-job cancellation** (`POST /api/generations/clip/[jobId]/cancel`)
+- `cancelQueuedClipperJobForUser` (`lifecycle.ts`) runs one transaction:
+  `UPDATE … SET status='CANCELLED' WHERE id AND userId AND type='VIDEO_CLIP' AND status='PENDING' AND startedAt IS NULL AND ingestionToken IS NULL`, followed by `refundJobDebit` (idempotent ledger).
+- The worker's `markClipperJobStarted` is a conditional UPDATE on the same row, so exactly one wins.
+  - If cancel wins, the worker's markStarted and lease claim both fail, and it never reads, renders, settles or deletes anything.
+  - If the worker wins, the response is 409 `JOB_ALREADY_STARTED` and polling continues.
+- Only the winning cancel deletes the user's own ephemeral upload (`cancel.ts`) and records the result. A failed or unrecorded delete stays in `pendingCleanups` (set at job creation) for the existing cron retry.
+- Existing `cancelClipperJob`, the 30-minute queue timeout and refunds are unchanged.
+
+**Download route** (`GET /api/generations/clip/[jobId]/clips/[assetId]/download`)
+- Requires a session and a rate-limit check, and validates both ids.
+- `getClipAssetForDownload`: the asset must belong to the user and to this job, and the job must be a COMPLETED VIDEO_CLIP job; the key-ownership check is applied again.
+- Answers 302 to a **60 s** signed link with `download=yourai-clip-<id>.mp4` (`Cache-Control: no-store`, `Referrer-Policy: no-referrer`).
+- `ClipperStorage.createSignedUrl` gained an optional `{ download }`, with the origin pinning kept.
+
+**Fix A (client controller)**
+- The reservation key is persisted (`yourai:clipper:reservation:<userId>`) as soon as it is granted.
+- It is released on cancel during reservation, upload or verification, on upload or verification failure, on definitive rejection, and on expiry.
+- It is cleared when a job takes ownership of the upload.
+- On page load, `recover()` releases an orphaned reservation unless another tab holds the Web Locks upload lock (`client/tab-lock.ts`).
+- `resume(jobId)` follows the server's active job (another device) without POSTing or creating a key.
+- `cancelQueued()` was added. `cancel()` now returns to idle from any active phase, keeping the pending record for recovery.
+
+**Tests (2026-11-11)**
+- `npm run test:clipper-b6`: 35/35.
+- `npm run test:clipper-ui`: 40/40.
+- `test:clipper-lifecycle`: 42/42, of which 7 are new (cancel, duplicate cancel, foreign user, both race orders, stray lease or startedAt, failed job).
+- Mutation checks: removing the verification-abort release causes 1 failure; removing the gate causes 1 failure.
+- Regression:
+  - clipper-api 73, clipper 43, clipper-analysis 34, clipper-render 69 (3 real-FFmpeg tests skipped);
+  - video-cron-auth 29, video-webhooks 161, video-adapters 116, video-lifecycle 70, video-storage 116, video-api 103, video-ui 74, operator-cli 74.
+- `npx tsc --noEmit` is clean; `npm run build` passes (new routes: cancel, download); `git diff --check` is clean.
+
+### 16.14 Stage 9 Batch 7 — Orientation-Neutral Limits, Phone Rotation Normalization, Upload Recovery, Real FFmpeg & PostgreSQL Integration (2026-11-12, uncommitted, awaiting review)
+
+**1. Orientation-Neutral Limits & Phone Rotation Normalization (`analysis/metadata.ts`, `validation.ts`)**
+- Source video validation updated to orientation-neutral bounds: `Math.max(w, h) <= 1920 && Math.min(w, h) <= 1080` and `Math.min(w, h) >= 360`, accepting portrait (1080×1920), landscape (1920×1080), and square (1080×1080) at up to 1080p, while rejecting 4K resolutions.
+- Implemented `parseRotationDegrees` parsing `side_data_list` (Display Matrix) and `tags.rotate`, normalizing to `0`, `90`, `180`, `270`.
+- Display dimensions normalized in `parseFfprobeJson`: coded landscape with 90° or 270° rotation tag is normalized to portrait display dimensions so smartphone videos render upright without distortion.
+- Fixed highlight candidate duration calculation in `analysis/highlight.ts`: dynamically scales `targetDur` down when `clipCount * targetDur > sourceDurationSeconds` with filler fallback, preventing false `INSUFFICIENT_HIGHLIGHTS` failures on short source files.
+
+**2. Upload Reservation Recovery & Safe Release (`uploads/uploads.ts`, `client/`, `POST /api/clipper/uploads/release-pending`)**
+- Client generates `uploadId` upfront and persists reservation intent to local storage before the request.
+- Dropped response / network failure handling: retries with identical `uploadId`, preventing duplicate reservation quota leaks.
+- Added `POST /api/clipper/uploads/release-pending` endpoint releasing unused upload reservations under user lock without touching in-use job assets.
+- Discard by ID releases orphaned reservation keys safely under user row lock.
+
+**3. Real FFmpeg Encoding & Suite (`scripts/test-clipper-ffmpeg-real.mts`)**
+- 7/7 passed using verified local FFmpeg binary:
+  - Synthetic multi-scene fixtures (portrait 1080×1920, landscape 1920×1080, square 1080×1080) with silence gaps.
+  - Phone rotation metadata validation (coded landscape + rotation → display portrait, rendered upright).
+  - 4K rejection by real metadata validation.
+  - Framing modes on portrait source keeping requested canvas.
+
+**4. Real PostgreSQL Integration Suite (`scripts/test-clipper-pg-integration.mts`)**
+- 15/15 passed against throwaway loopback cluster (`yourai_it` on port 55432):
+  - Partial unique index across generation types (`GenerationJob_one_active_per_user`).
+  - Race ×30: user cancel vs worker pickup — exactly one winner, refund iff cancel won, ledger balanced.
+  - 10 concurrent cancels of one job → exactly one settles, one refund.
+  - Cross-stage one-active-job: clip vs video vs image in parallel → exactly one created.
+  - Real user row lock: 8 parallel upload intents → exactly 1 reservation.
+  - JSON-path queries against real jsonb: active keys, referenced, pending cleanups, download lookup.
+  - Stale queue sweep: 31-minute-old PENDING job fails + refunds once.
+  - Global ledger balance invariant preserved across all tests.
+
+**5. Verification Matrix (Stage 9)**
+- `npm run test:clipper` (Batch 1 domain): **43/43 PASS**
+- `npm run test:clipper-lifecycle` (Batch 2 state machine): **42/42 PASS**
+- `npm run test:clipper-analysis` (Batch 3 analysis & subtitles): **34/34 PASS**
+- `npm run test:clipper-render` (Batch 4 offline render): **69/69 PASS** (3 real-FFmpeg skipped in offline runner)
+- `npm run test:clipper-api` (Batch 5 API & worker loop): **73/73 PASS**
+- `npm run test:clipper-b6` (Batch 6 cancel & download): **35/35 PASS**
+- `npm run test:clipper-b7` (Batch 7 orientation & recovery): **38/38 PASS**
+- `npm run test:clipper-ui` (UI components & flow): **41/41 PASS**
+- `npm run test:clipper-ffmpeg` (Real FFmpeg encode): **7/7 PASS** (0 failed, 0 skipped)
+- `test:clipper-pg` (Real PostgreSQL integration): **15/15 PASS** (20/20 isolation guard checks passed)
+- **Total Stage 9 Tests Passed: 397 tests across 10 suites**
+- Stage 8 regression tests: 289 passed (`video-cron-auth` 29, `video-adapters` 116, `video-lifecycle` 70, `operator-cli` 74).
+- `tsc --noEmit`: 0 errors.
+- `next build --webpack`: 22/22 routes successfully prerendered and optimized.
+- `git diff --check`: clean (0 whitespace errors).

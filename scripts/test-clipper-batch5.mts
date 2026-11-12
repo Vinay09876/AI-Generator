@@ -519,6 +519,10 @@ async function run() {
       loadJob: async () => ({ ...completedRecord(), status: "PENDING" }),
       loadBalance: async () => 90,
       signAsset: async (_u, id, kind) => `https://proj.supabase.co/sign/${id}-${kind}?token=z`,
+      // Batch 6 deps (not exercised by Batch 5 tests)
+      submissionsEnabled: () => true,
+      cancelJob: async () => ({ outcome: "not_found" as const }),
+      signDownload: async () => null,
       log: { error: () => {} },
       ...over,
     });

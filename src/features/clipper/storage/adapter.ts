@@ -40,8 +40,11 @@ export interface ClipperStorage {
   readPrefix(key: string, length: number): Promise<Buffer>;
   /** Streams an object with a hard byte cap (never buffers the whole object). */
   openDownloadStream(key: string, maxBytes: number): Promise<Readable>;
-  /** Short-lived signed GET URL. */
-  createSignedUrl(key: string, expiresInSeconds: number): Promise<string>;
+  /**
+   * Short-lived signed GET URL. With `download`, the storage server is asked to send
+   * Content-Disposition: attachment with that filename (Batch 6 download route).
+   */
+  createSignedUrl(key: string, expiresInSeconds: number, options?: { download?: string }): Promise<string>;
   putStream(
     key: string,
     stream: NodeJS.ReadableStream,

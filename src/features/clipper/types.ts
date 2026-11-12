@@ -40,6 +40,14 @@ export interface VideoMetadata {
   bitrate: number | null;
   /** Total container byte size, if known. */
   fileSizeBytes: number;
+  /**
+   * Batch 7: container rotation (0/90/180/270). width/height above are DISPLAY dimensions
+   * (rotation applied); codedWidth/codedHeight are the stored frame size. Optional for
+   * backwards compatibility with fixtures and the mock engine.
+   */
+  rotationDegrees?: number;
+  codedWidth?: number;
+  codedHeight?: number;
 }
 
 // ---------------------------------------------------------------------------

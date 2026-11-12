@@ -14,12 +14,9 @@ import {
   ALLOWED_CLIPPER_MIME_TYPES,
   CLIPPER_ASPECT_RATIOS,
   CLIPPER_FRAMING_MODES,
-  DEFAULT_MAX_SOURCE_HEIGHT,
-  DEFAULT_MAX_SOURCE_WIDTH,
   DEFAULT_MIN_CLIP_DURATION_SECONDS,
   DEFAULT_MAX_CLIP_DURATION_SECONDS,
-  DEFAULT_MIN_SOURCE_HEIGHT,
-  DEFAULT_MIN_SOURCE_WIDTH,
+  checkSourceDimensions,
   getClipperMaxSourceDurationSeconds,
   getClipperMaxUploadBytes,
   getClipperMinSourceDurationSeconds,
@@ -217,20 +214,10 @@ export function validateSourceMetadata(metadata: VideoMetadata): ValidationResul
     };
   }
 
-  if (metadata.width > DEFAULT_MAX_SOURCE_WIDTH || metadata.height > DEFAULT_MAX_SOURCE_HEIGHT) {
-    return {
-      valid: false,
-      code: "RESOLUTION_TOO_HIGH",
-      error: `Video resolution (${metadata.width}x${metadata.height}) exceeds 1080p limit (${DEFAULT_MAX_SOURCE_WIDTH}x${DEFAULT_MAX_SOURCE_HEIGHT}).`,
-    };
-  }
-
-  if (metadata.width < DEFAULT_MIN_SOURCE_WIDTH || metadata.height < DEFAULT_MIN_SOURCE_HEIGHT) {
-    return {
-      valid: false,
-      code: "RESOLUTION_TOO_LOW",
-      error: `Video resolution (${metadata.width}x${metadata.height}) is below minimum supported (${DEFAULT_MIN_SOURCE_WIDTH}x${DEFAULT_MIN_SOURCE_HEIGHT}).`,
-    };
+  // Batch 7: orientation-neutral limits (portrait, landscape and square alike).
+  const dims = checkSourceDimensions(metadata.width, metadata.height);
+  if (!dims.ok) {
+    return { valid: false, code: dims.code, error: dims.message };
   }
 
   // Audio track evaluation: if absent, we permit visual-only mode

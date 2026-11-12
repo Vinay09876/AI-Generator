@@ -33,5 +33,6 @@ export * from "./http";
 export * from "./maintenance";
 export * from "./worker/plan-clips";
 export * from "./worker/loop";
+export * from "./cancel";
 // ./worker/wiring, ./service, ./queries and ./storage/supabase-clipper are intentionally NOT
 // re-exported (server-only live adapters). Client code lives in ./client (browser-safe).

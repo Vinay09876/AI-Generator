@@ -61,6 +61,8 @@ export interface FfprobeStream {
   sample_rate?: string;
   channels?: number;
   channel_layout?: string;
+  side_data_list?: Array<Record<string, any>>;
+  tags?: Record<string, string>;
 }
 
 export interface FfprobeFormat {
@@ -76,6 +78,44 @@ export interface FfprobeFormat {
 export interface FfprobeJsonOutput {
   streams?: FfprobeStream[];
   format?: FfprobeFormat;
+}
+
+// ---------------------------------------------------------------------------
+// Rotation Degrees Helper
+// ---------------------------------------------------------------------------
+/**
+ * Normalises rotation metadata from FFprobe stream side data or tags to 0, 90, 180, or 270 degrees.
+ * Returns 0 if no rotation metadata is present or if the value cannot be parsed.
+ */
+export function parseRotationDegrees(stream: Record<string, any> | undefined): number {
+  if (!stream || typeof stream !== "object") return 0;
+  let rawAngle: number | undefined;
+
+  if (Array.isArray(stream.side_data_list)) {
+    for (const item of stream.side_data_list) {
+      if (item && item.rotation !== undefined) {
+        const parsed = parseFloat(String(item.rotation));
+        if (Number.isFinite(parsed)) {
+          rawAngle = parsed;
+          break;
+        }
+      }
+    }
+  }
+
+  if (rawAngle === undefined && stream.tags && stream.tags.rotate !== undefined) {
+    const parsed = parseFloat(String(stream.tags.rotate));
+    if (Number.isFinite(parsed)) {
+      rawAngle = parsed;
+    }
+  }
+
+  if (rawAngle === undefined || !Number.isFinite(rawAngle)) {
+    return 0;
+  }
+
+  const deg = ((Math.round(rawAngle) % 360) + 360) % 360;
+  return deg === 360 ? 0 : deg;
 }
 
 // ---------------------------------------------------------------------------
@@ -116,15 +156,20 @@ export function parseFfprobeJson(jsonStr: string, fallbackSizeBytes?: number): V
     );
   }
 
-  // Dimensions
-  const width = videoStream.width ?? 0;
-  const height = videoStream.height ?? 0;
-  if (width <= 0 || height <= 0) {
+  // Dimensions & rotation handling
+  const codedWidth = videoStream.width ?? 0;
+  const codedHeight = videoStream.height ?? 0;
+  if (codedWidth <= 0 || codedHeight <= 0) {
     throw new MetadataExtractionError(
-      `Invalid video dimensions: ${width}x${height}`,
+      `Invalid video dimensions: ${codedWidth}x${codedHeight}`,
       "INVALID_DIMENSIONS",
     );
   }
+
+  const rotationDegrees = parseRotationDegrees(videoStream);
+  const isTransposed = rotationDegrees === 90 || rotationDegrees === 270;
+  const width = isTransposed ? codedHeight : codedWidth;
+  const height = isTransposed ? codedWidth : codedHeight;
 
   // FPS
   const fps = parseFpsFraction(videoStream.r_frame_rate ?? videoStream.avg_frame_rate);
@@ -157,6 +202,9 @@ export function parseFfprobeJson(jsonStr: string, fallbackSizeBytes?: number): V
     channels,
     bitrate: Number.isFinite(bitrate) ? bitrate : null,
     fileSizeBytes,
+    rotationDegrees,
+    codedWidth,
+    codedHeight,
   };
 }
 

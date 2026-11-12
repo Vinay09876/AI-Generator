@@ -34,6 +34,7 @@ import {
   CLIPPER_PROCESSING_STALE_MS,
   JobNotCompletableError,
   cancelClipperJob,
+  cancelQueuedClipperJobForUser,
   claimClipperLease,
   completeClipperJobWithAssets,
   countDailyClipJobs,
@@ -177,6 +178,35 @@ function createMockDb(): { db: any; state: MockDbState } {
           if (sql.includes('SELECT "id" FROM "User"') && sql.includes('WHERE "id" =')) {
             const uid = String(p[0]);
             return state.users.has(uid) ? [{ id: uid }] : [];
+          }
+
+          // 1b. Batch 6 user cancel of a QUEUED job (owner + type + PENDING + never started + no lease token)
+          if (sql.includes('UPDATE "GenerationJob"') && sql.includes("'CANCELLED'") && sql.includes('"startedAt" IS NULL')) {
+            const reason = String(p[0]);
+            const jobId = String(p[1]);
+            const userId = String(p[2]);
+            const job = state.jobs.get(jobId);
+            if (
+              !job ||
+              job.userId !== userId ||
+              (job.type ?? GenerationType.VIDEO_CLIP) !== GenerationType.VIDEO_CLIP ||
+              job.status !== GenerationStatus.PENDING ||
+              job.startedAt ||
+              job.ingestionToken
+            ) {
+              return [];
+            }
+            job.status = GenerationStatus.CANCELLED;
+            job.errorMessage = reason;
+            job.ingestionLeaseExpiresAt = null;
+            job.completedAt = new Date();
+            job.updatedAt = new Date();
+            return [{ id: job.id, settings: job.settings }];
+          }
+          // 1c. Batch 6 owner-scoped status read after a cancel that matched nothing
+          if (sql.includes('SELECT "status"::text AS "status" FROM "GenerationJob"')) {
+            const job = state.jobs.get(String(p[0]));
+            return job && job.userId === String(p[1]) ? [{ status: job.status }] : [];
           }
 
           // 2. UPDATE "CreditWallet" SET "balance" = "balance" - ? WHERE "userId" = ? AND "balance" >= ?
@@ -1628,6 +1658,110 @@ async function run() {
     assert.equal(s.sourceType, "platform_asset");
     assert.deepEqual(s.pendingCleanups, []);
     assert.equal(s.cleanupStatus, "cleaned");
+  });
+
+  // -------------------------------------------------------------------------
+  // Batch 6: user cancellation of QUEUED jobs
+  // -------------------------------------------------------------------------
+  async function queuedJob(userId: string, idem: string) {
+    const { db, state } = createMockDb();
+    state.users.set(userId, { id: userId, email: `${userId}@example.com` });
+    state.wallets.set(userId, { id: `w_${userId}`, userId, balance: 100 });
+    const { job } = await createClipperJob(
+      {
+        userId,
+        sourceKey: `ephemeral/users/${userId}/uploads/upl_source001.mp4`,
+        sourceDurationSeconds: 60,
+        requestedClipsCount: 2,
+        idempotencyKey: idem,
+      },
+      {},
+      db,
+    );
+    return { db, state, job };
+  }
+
+  await test("B6 cancelQueued: owner cancels a PENDING job -> CANCELLED + exactly one refund", async () => {
+    const { db, state, job } = await queuedJob("usr_qcancel01", "idem_qc_1");
+    assert.equal(state.wallets.get("usr_qcancel01")?.balance, 90);
+    const res = await cancelQueuedClipperJobForUser({ jobId: job.id, userId: "usr_qcancel01" }, db);
+    assert.equal(res.settled, true);
+    if (!res.settled) return;
+    assert.equal(res.refund?.refunded, true);
+    assert.equal(res.refund?.amount, 10);
+    assert.equal(state.wallets.get("usr_qcancel01")?.balance, 100);
+    const row = state.jobs.get(job.id)!;
+    assert.equal(row.status, GenerationStatus.CANCELLED);
+    assert.match(String(row.errorMessage), /\(USER_CANCELLED\)/);
+    assert.equal((res.settings as any).sourceKey, "ephemeral/users/usr_qcancel01/uploads/upl_source001.mp4");
+  });
+
+  await test("B6 cancelQueued: a duplicate cancel never refunds twice", async () => {
+    const { db, state, job } = await queuedJob("usr_qcancel02", "idem_qc_2");
+    await cancelQueuedClipperJobForUser({ jobId: job.id, userId: "usr_qcancel02" }, db);
+    const again = await cancelQueuedClipperJobForUser({ jobId: job.id, userId: "usr_qcancel02" }, db);
+    assert.equal(again.settled, false);
+    if (again.settled) return;
+    assert.equal(again.currentStatus, GenerationStatus.CANCELLED);
+    assert.equal(state.wallets.get("usr_qcancel02")?.balance, 100);
+  });
+
+  await test("B6 cancelQueued: a job owned by another user is invisible (no change, no refund)", async () => {
+    const { db, state, job } = await queuedJob("usr_qcancel03", "idem_qc_3");
+    const res = await cancelQueuedClipperJobForUser({ jobId: job.id, userId: "usr_attacker1" }, db);
+    assert.equal(res.settled, false);
+    if (res.settled) return;
+    assert.equal(res.currentStatus, null);
+    assert.equal(state.jobs.get(job.id)?.status, GenerationStatus.PENDING);
+    assert.equal(state.wallets.get("usr_qcancel03")?.balance, 90);
+  });
+
+  await test("B6 race: worker pickup first -> cancel loses, job keeps processing, no refund", async () => {
+    const { db, state, job } = await queuedJob("usr_qcancel04", "idem_qc_4");
+    assert.equal(await markClipperJobStarted({ jobId: job.id }, db), true);
+    const res = await cancelQueuedClipperJobForUser({ jobId: job.id, userId: "usr_qcancel04" }, db);
+    assert.equal(res.settled, false);
+    if (res.settled) return;
+    assert.equal(res.currentStatus, GenerationStatus.PROCESSING);
+    assert.equal(state.jobs.get(job.id)?.status, GenerationStatus.PROCESSING);
+    assert.equal(state.wallets.get("usr_qcancel04")?.balance, 90);
+    const lease = await claimClipperLease({ jobId: job.id }, db);
+    assert.equal(lease.claimed, true, "the worker that won keeps its job");
+  });
+
+  await test("B6 race: cancel first -> worker pickup and lease claim both fail", async () => {
+    const { db, state, job } = await queuedJob("usr_qcancel05", "idem_qc_5");
+    const res = await cancelQueuedClipperJobForUser({ jobId: job.id, userId: "usr_qcancel05" }, db);
+    assert.equal(res.settled, true);
+    assert.equal(await markClipperJobStarted({ jobId: job.id }, db), false);
+    const lease = await claimClipperLease({ jobId: job.id }, db);
+    assert.equal(lease.claimed, false);
+    assert.equal(state.jobs.get(job.id)?.status, GenerationStatus.CANCELLED);
+    assert.equal(state.wallets.get("usr_qcancel05")?.balance, 100);
+  });
+
+  await test("B6 cancelQueued: a PENDING row with a lease token or startedAt is not cancellable", async () => {
+    const { db, state, job } = await queuedJob("usr_qcancel06", "idem_qc_6");
+    state.jobs.get(job.id)!.ingestionToken = "stray-token";
+    let res = await cancelQueuedClipperJobForUser({ jobId: job.id, userId: "usr_qcancel06" }, db);
+    assert.equal(res.settled, false);
+    state.jobs.get(job.id)!.ingestionToken = null;
+    state.jobs.get(job.id)!.startedAt = new Date();
+    res = await cancelQueuedClipperJobForUser({ jobId: job.id, userId: "usr_qcancel06" }, db);
+    assert.equal(res.settled, false);
+    assert.equal(state.wallets.get("usr_qcancel06")?.balance, 90);
+  });
+
+  await test("B6 cancelQueued: FAILED jobs are never cancelled or refunded again", async () => {
+    const { db, state, job } = await queuedJob("usr_qcancel07", "idem_qc_7");
+    await failClipperJob(job.id, "boom", db);
+    const balanceAfterFail = state.wallets.get("usr_qcancel07")?.balance;
+    assert.equal(balanceAfterFail, 100);
+    const res = await cancelQueuedClipperJobForUser({ jobId: job.id, userId: "usr_qcancel07" }, db);
+    assert.equal(res.settled, false);
+    if (res.settled) return;
+    assert.equal(res.currentStatus, GenerationStatus.FAILED);
+    assert.equal(state.wallets.get("usr_qcancel07")?.balance, 100);
   });
 
   // -------------------------------------------------------------------------

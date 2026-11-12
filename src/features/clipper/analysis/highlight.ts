@@ -233,7 +233,16 @@ export function scoreCandidateHighlights(params: HighlightScoringParams): Candid
   const clipCount = Math.max(1, Math.min(requestedClipsCount, 3));
   const minDur = DEFAULT_MIN_CLIP_DURATION_SECONDS;
   const maxDur = Math.min(DEFAULT_MAX_CLIP_DURATION_SECONDS, sourceDurationSeconds);
-  const targetDur = Math.max(minDur, Math.min(targetClipDurationSeconds, maxDur));
+  let targetDur = Math.max(minDur, Math.min(targetClipDurationSeconds, maxDur));
+
+  // If multiple clips are requested and the requested count cannot fit at targetDur,
+  // scale targetDur down so non-overlapping clips can be formed (as long as >= minDur).
+  if (clipCount > 1 && clipCount * targetDur > sourceDurationSeconds) {
+    const partitionedDur = Math.floor(sourceDurationSeconds / clipCount);
+    if (partitionedDur >= minDur) {
+      targetDur = partitionedDur;
+    }
+  }
 
   const isVisualOnly = transcript.isVisualOnly || transcript.segments.length === 0;
 
@@ -408,6 +417,47 @@ export function scoreCandidateHighlights(params: HighlightScoringParams): Candid
       aspectRatio: targetAspectRatio,
       framing: targetFraming,
     });
+  }
+
+  // Supplementary filler: if fewer non-overlapping windows were selected than requested,
+  // search available timeline gaps for additional non-overlapping segments.
+  if (selected.length < clipCount && sourceDurationSeconds >= minDur) {
+    for (let t = 0; t + minDur <= sourceDurationSeconds && selected.length < clipCount; t += 1) {
+      const candStart = t;
+      const candEnd = Math.min(sourceDurationSeconds, t + targetDur);
+      if (candEnd - candStart < minDur) continue;
+
+      let overlaps = false;
+      for (const existing of selected) {
+        const overlapStart = Math.max(candStart, existing.startTime);
+        const overlapEnd = Math.min(candEnd, existing.endTime);
+        if (overlapEnd > overlapStart) {
+          const overlapDuration = overlapEnd - overlapStart;
+          const minD = Math.min(candEnd - candStart, existing.durationSeconds);
+          if (overlapDuration / minD > 0.2) {
+            overlaps = true;
+            break;
+          }
+        }
+      }
+
+      if (!overlaps) {
+        selected.push({
+          id: `highlight-${selected.length + 1}`,
+          title: `Clip #${selected.length + 1}`,
+          startTime: candStart,
+          endTime: candEnd,
+          durationSeconds: Math.round((candEnd - candStart) * 100) / 100,
+          score: 30,
+          reason: "Timeline coverage for requested clip count",
+          transcriptText: "",
+          words: [],
+          aspectRatio: targetAspectRatio,
+          framing: targetFraming,
+        });
+        t += Math.max(1, Math.floor((candEnd - candStart) * 0.8));
+      }
+    }
   }
 
   return selected;

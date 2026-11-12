@@ -56,6 +56,7 @@ const FAILURE_MESSAGES: Record<string, string> = {
   SOURCE_TOO_LONG: "The video is longer than the maximum length. Credits were refunded.",
   RENDER_TIMEOUT: "Rendering took too long. Credits were refunded.",
   WORKER_SHUTDOWN: "Processing was interrupted. Credits were refunded.",
+  USER_CANCELLED: "You cancelled this job before processing started. Credits were refunded.",
 };
 
 export function parseFailureCode(errorMessage: string | null): string | null {

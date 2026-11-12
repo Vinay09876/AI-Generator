@@ -16,7 +16,9 @@
 
 import { randomUUID } from "node:crypto";
 import {
+  CLIPPER_CLIENT_UPLOAD_ID_REGEX,
   CLIPPER_STORAGE_OP_TIMEOUT_MS,
+  CLIPPER_UPLOAD_INTENT_DEADLINE_MS,
   CLIPPER_UPLOAD_LISTING_MAX_OBJECTS,
   CLIPPER_UPLOAD_SIGNATURE_BYTES,
   CLIPPER_UPLOAD_USE_MARGIN_SECONDS,
@@ -186,13 +188,24 @@ export function evaluateUploadQuota(params: {
 export interface UploadIntentResult {
   uploadKey: string;
   uploadId: string;
+  /** Batch 7: true when this answered a retry of an existing reservation (same uploadId). */
+  regranted: boolean;
   signedUrl: string;
   contentType: AllowedClipperMimeType;
   maxBytes: number;
   expiresAt: string;
 }
 
-export function validateUploadIntentInput(input: unknown): { mimeType: AllowedClipperMimeType; sizeBytes: number } {
+/** Batch 7: optional browser-chosen upload id (strict format; always placed in the caller's folder). */
+export function parseClientUploadId(value: unknown): string | null {
+  if (value === undefined || value === null) return null;
+  if (typeof value !== "string" || !CLIPPER_CLIENT_UPLOAD_ID_REGEX.test(value)) {
+    throw new ClipperUploadError("INVALID_INPUT", "Invalid upload id.");
+  }
+  return value;
+}
+
+export function validateUploadIntentInput(input: unknown): { mimeType: AllowedClipperMimeType; sizeBytes: number; uploadId: string | null } {
   const body = (input ?? {}) as Record<string, unknown>;
   const mime = validateUploadMimeType(body.mimeType);
   if (!mime.valid) throw new ClipperUploadError("INVALID_INPUT", "Only MP4, MOV or WebM videos are supported.");
@@ -205,7 +218,7 @@ export function validateUploadIntentInput(input: unknown): { mimeType: AllowedCl
         : "A valid file size is required.",
     );
   }
-  return { mimeType: mime.data, sizeBytes: size.data };
+  return { mimeType: mime.data, sizeBytes: size.data, uploadId: parseClientUploadId(body.uploadId) };
 }
 
 export async function createUploadIntent(
@@ -214,19 +227,46 @@ export async function createUploadIntent(
 ): Promise<UploadIntentResult> {
   const { userId } = params;
   assertSafeIdentifier("userId", userId);
-  const { mimeType, sizeBytes } = validateUploadIntentInput(params.input);
+  const { mimeType, sizeBytes, uploadId: clientUploadId } = validateUploadIntentInput(params.input);
   const timeoutMs = deps.storageTimeoutMs ?? CLIPPER_STORAGE_OP_TIMEOUT_MS;
-  const now = deps.now?.() ?? new Date();
+  const clock = () => deps.now?.() ?? new Date();
+  const now = clock();
+  const arrivedAt = now.getTime();
 
-  const uploadId = `upl_${randomUUID().replace(/-/g, "")}`;
+  const uploadId = clientUploadId ?? `upl_${randomUUID().replace(/-/g, "")}`;
   const uploadKey = buildEphemeralUploadKey({ userId, uploadId, extension: MIME_EXTENSION[mimeType] });
+  const pastDeadline = () => clock().getTime() - arrivedAt > CLIPPER_UPLOAD_INTENT_DEADLINE_MS;
 
+  let regranted = false;
   await deps.withUserLock(userId, async (scope) => {
     const [activeSourceKeys, objects] = await Promise.all([
       scope.activeSourceKeys(),
       listUserUploadsStrict(deps.storage, userId, { timeoutMs }),
     ]);
+
+    const existing = clientUploadId ? objects.find((o) => o.key === uploadKey) : undefined;
+    if (existing) {
+      // Retry of a reservation this user already holds (lost response). Never a second slot.
+      if (activeSourceKeys.includes(uploadKey) || (await deps.isSourceKeyReferenced(userId, uploadKey))) {
+        throw new ClipperUploadError("UPLOAD_ALREADY_USED", "This upload was already used. Please upload the video again.");
+      }
+      const born = existing.createdAt ?? existing.updatedAt;
+      if (!born) throw new ClipperUploadError("QUOTA_UNVERIFIABLE", "Upload quota could not be verified. Please try again shortly.");
+      if (clock().getTime() > born.getTime() + (EPHEMERAL_UPLOAD_TTL_SECONDS - CLIPPER_UPLOAD_USE_MARGIN_SECONDS) * 1000) {
+        throw new ClipperUploadError("UPLOAD_EXPIRED", "This upload has expired. Please upload the video again.");
+      }
+      // Quota is evaluated WITHOUT this object (it is the reservation being re-granted), so every
+      // other pending upload still counts exactly as before.
+      evaluateUploadQuota({ objects: objects.filter((o) => o.key !== uploadKey), activeSourceKeys, declaredSizeBytes: sizeBytes });
+      regranted = true;
+      return;
+    }
+
     evaluateUploadQuota({ objects, activeSourceKeys, declaredSizeBytes: sizeBytes });
+    if (pastDeadline()) {
+      // Never write a reservation the browser may already have given up on (see config).
+      throw new ClipperUploadError("STORAGE_UNAVAILABLE", "Uploads are temporarily unavailable. Please try again.");
+    }
     try {
       await withStorageTimeout("placeholder", timeoutMs, deps.storage.putPlaceholder(uploadKey, mimeType));
     } catch {
@@ -239,17 +279,20 @@ export async function createUploadIntent(
   try {
     signed = await withStorageTimeout("sign-upload", timeoutMs, deps.storage.createSignedUploadUrl(uploadKey));
   } catch {
-    await deps.storage.delete(uploadKey).catch(() => {}); // release the reservation (sweep is the backstop)
+    // Release a reservation created by THIS request (sweep is the backstop). A re-granted one may
+    // already hold the user's bytes, so it is left for the user to retry or discard.
+    if (!regranted) await deps.storage.delete(uploadKey).catch(() => {});
     throw new ClipperUploadError("STORAGE_UNAVAILABLE", "Uploads are temporarily unavailable. Please try again.");
   }
   if (signed.key !== uploadKey) {
-    await deps.storage.delete(uploadKey).catch(() => {});
+    if (!regranted) await deps.storage.delete(uploadKey).catch(() => {});
     throw new ClipperUploadError("STORAGE_UNAVAILABLE", "Uploads are temporarily unavailable. Please try again.");
   }
 
   return {
     uploadKey,
     uploadId,
+    regranted,
     signedUrl: signed.signedUrl,
     contentType: mimeType,
     maxBytes: getClipperMaxUploadBytes(),
@@ -323,11 +366,23 @@ export async function verifyUpload(
 // ---------------------------------------------------------------------------
 // Discard (user-initiated release of a pending upload)
 // ---------------------------------------------------------------------------
+/**
+ * Resolves the upload to discard: an explicit key, or (Batch 7) a browser-chosen uploadId plus its
+ * MIME type, built inside the caller's own folder. Never accepts a path from another namespace.
+ */
+export function resolveDiscardTarget(userId: string, params: { uploadKey?: unknown; uploadId?: unknown; mimeType?: unknown }): string {
+  if (params.uploadKey !== undefined && params.uploadKey !== null) return assertOwnedUploadKey(userId, params.uploadKey);
+  const uploadId = parseClientUploadId(params.uploadId);
+  const mime = validateUploadMimeType(params.mimeType);
+  if (!uploadId || !mime.valid) throw new ClipperUploadError("INVALID_INPUT", "An upload key, or an upload id and type, is required.");
+  return buildEphemeralUploadKey({ userId, uploadId, extension: MIME_EXTENSION[mime.data] });
+}
+
 export async function discardUpload(
   deps: ClipperUploadDeps,
-  params: { userId: string; uploadKey: unknown },
+  params: { userId: string; uploadKey?: unknown; uploadId?: unknown; mimeType?: unknown },
 ): Promise<{ deleted: true }> {
-  const key = assertOwnedUploadKey(params.userId, params.uploadKey);
+  const key = resolveDiscardTarget(params.userId, params);
   await deps.withUserLock(params.userId, async (scope) => {
     const active = await scope.activeSourceKeys();
     if (active.includes(key)) {
@@ -340,4 +395,43 @@ export async function discardUpload(
     }
   });
   return { deleted: true };
+}
+
+// ---------------------------------------------------------------------------
+// Batch 7: release every pending upload of the caller (cross-device / cleared-storage recovery)
+// ---------------------------------------------------------------------------
+/**
+ * User-initiated. Under the same per-user lock as reservations, deletes the caller's own uploads
+ * that no ACTIVE clip job uses. It only ever removes objects, so it cannot be used to exceed the
+ * quota. Listing fails closed (nothing is deleted when completeness cannot be proven).
+ */
+export async function releasePendingUploads(
+  deps: ClipperUploadDeps,
+  params: { userId: string },
+): Promise<{ released: number; kept: number }> {
+  const { userId } = params;
+  assertSafeIdentifier("userId", userId);
+  const timeoutMs = deps.storageTimeoutMs ?? CLIPPER_STORAGE_OP_TIMEOUT_MS;
+  return deps.withUserLock(userId, async (scope) => {
+    const [activeSourceKeys, objects] = await Promise.all([
+      scope.activeSourceKeys(),
+      listUserUploadsStrict(deps.storage, userId, { timeoutMs }),
+    ]);
+    const active = new Set(activeSourceKeys);
+    let released = 0;
+    let kept = 0;
+    for (const obj of objects) {
+      if (active.has(obj.key) || !isEphemeralUploadKeyOwnedBy(obj.key, userId)) {
+        kept++;
+        continue;
+      }
+      try {
+        await withStorageTimeout("delete", timeoutMs, deps.storage.delete(obj.key));
+        released++;
+      } catch {
+        throw new ClipperUploadError("STORAGE_UNAVAILABLE", "Pending uploads could not be released. Please try again.");
+      }
+    }
+    return { released, kept };
+  });
 }

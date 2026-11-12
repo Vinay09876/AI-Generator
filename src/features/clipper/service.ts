@@ -9,40 +9,64 @@ import { prisma } from "@/lib/prisma";
 import { resolveTrustedOrigins } from "@/lib/api";
 import { defaultRateLimiter, RATE_LIMITS } from "@/lib/rate-limit";
 import { AccountingError } from "@/features/generations/errors";
-import { CLIPPER_SIGNED_URL_EXPIRY_SECONDS } from "./config";
+import { utcDayRange } from "@/lib/utc";
+import { getWalletSummary } from "@/features/credits/queries";
+import { cancelQueuedClipJob } from "./cancel";
+import {
+  CLIPPER_ANALYSIS_CAPABILITIES,
+  CLIPPER_CLIP_DURATION_INFO,
+  CLIPPER_DOWNLOAD_URL_EXPIRY_SECONDS,
+  CLIPPER_QUEUE_WAIT_STALE_MS,
+  CLIPPER_SIGNED_URL_EXPIRY_SECONDS,
+  DEFAULT_CREDIT_COST_PER_CLIP,
+  DEFAULT_MAX_SOURCE_LONG_EDGE,
+  DEFAULT_MAX_SOURCE_PIXELS,
+  DEFAULT_MAX_SOURCE_SHORT_EDGE,
+  DEFAULT_MIN_SOURCE_LONG_EDGE,
+  DEFAULT_MIN_SOURCE_SHORT_EDGE,
+  ALLOWED_CLIPPER_MIME_TYPES,
+  ALLOWED_FILE_EXTENSIONS,
+  getClipperMaxClipsPerJob,
+  getClipperMaxSourceDurationSeconds,
+  getClipperMaxUploadBytes,
+  getClipperMinSourceDurationSeconds,
+  getDailyUserClipLimit,
+  resolveClipperSubmissionsSwitch,
+} from "./config";
 import { createClipperHandlers } from "./http";
-import { createClipperJob, getClipperJobCleanupState, reconcileStaleClipperJobs, recordClipperCleanupResults } from "./lifecycle";
+import { toClipJobView, type ClipJobRecord, type ClipJobView } from "./job-view";
+import type { ClipperLimitsView } from "./client/view-state";
+import {
+  cancelQueuedClipperJobForUser,
+  countDailyClipJobs,
+  createClipperJob,
+  getClipperJobCleanupState,
+  reconcileStaleClipperJobs,
+  recordClipperCleanupResults,
+} from "./lifecycle";
 import { createClipperCronHandler, type ClipperMaintenanceDeps } from "./maintenance";
 import {
   findClipJobIdByIdempotencyKey,
   findClipJobsWithPendingCleanups,
+  getActiveClipJobForUser,
   getActiveClipSourceKeys,
+  getClipAssetForDownload,
   getClipAssetKeys,
   getClipJobForUser,
   getPlatformVideoAsset,
+  getRecentCompletedClipJobsForUser,
   isClipSourceKeyReferenced,
   isUploadKeyInActiveClipJob,
 } from "./queries";
 import { isClipKeyOwnedBy, isClipThumbnailKeyOwnedBy } from "./storage/keys";
 import { getClipperStorage } from "./storage/supabase-clipper";
+import { createPrismaUserLock } from "./user-lock";
 import type { ClipperUploadDeps } from "./uploads/uploads";
 
 let trustedOrigins: string[] | undefined;
 
-/**
- * Serialises upload reservation per user with the same `User` row lock used by job creation.
- * NOTE: the lock is held across bounded storage calls (list + placeholder, each ≤5 s); this is
- * deliberate so concurrent intents cannot both pass the one-pending-upload check.
- */
-const withUserLock: ClipperUploadDeps["withUserLock"] = (userId, fn) =>
-  prisma.$transaction(
-    async (tx) => {
-      const locked = await tx.$queryRaw<{ id: string }[]>`SELECT "id" FROM "User" WHERE "id" = ${userId} FOR UPDATE`;
-      if (locked.length === 0) throw new AccountingError("USER_NOT_FOUND");
-      return fn({ activeSourceKeys: () => getActiveClipSourceKeys(userId, tx) });
-    },
-    { maxWait: 5_000, timeout: 20_000 },
-  );
+/** Same `User` row lock as job creation (see ./user-lock.ts). */
+const withUserLock: ClipperUploadDeps["withUserLock"] = createPrismaUserLock(prisma);
 
 function uploadDeps(): ClipperUploadDeps {
   return {
@@ -80,8 +104,101 @@ export function getClipperHandlers() {
     loadBalance: async (userId) =>
       (await prisma.creditWallet.findUnique({ where: { userId }, select: { balance: true } }))?.balance ?? null,
     signAsset: signClipAsset,
+    submissionsEnabled: () => resolveClipperSubmissionsSwitch(process.env).enabled,
+    cancelJob: (userId, jobId) =>
+      cancelQueuedClipJob(
+        {
+          cancelInDb: (p) => cancelQueuedClipperJobForUser(p),
+          storage: getClipperStorage(),
+          recordCleanup: (p) => recordClipperCleanupResults(p),
+        },
+        { userId, jobId },
+      ),
+    signDownload: signClipDownload,
   });
   return handlers;
+}
+
+async function signClipDownload(userId: string, jobId: string, assetId: string): Promise<string | null> {
+  const asset = await getClipAssetForDownload(userId, jobId, assetId);
+  if (!asset || !isClipKeyOwnedBy(asset.storageKey, userId)) return null;
+  // Rendered clips are always MP4 (H.264/AAC).
+  return getClipperStorage().createSignedUrl(asset.storageKey, CLIPPER_DOWNLOAD_URL_EXPIRY_SECONDS, {
+    download: `yourai-clip-${assetId.slice(0, 12)}.mp4`,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Batch 6: server data for the /video-clipper page (read-only)
+// ---------------------------------------------------------------------------
+export type ClipperPageLimits = ClipperLimitsView;
+
+export interface ClipperPageData {
+  submissions: { enabled: boolean; source: "explicit" | "default" | "invalid" };
+  limits: ClipperPageLimits;
+  analysis: typeof CLIPPER_ANALYSIS_CAPABILITIES;
+  balance: number;
+  dailyUsed: number;
+  dailyLimit: number;
+  activeJob: ClipJobView | null;
+  recentJobs: ClipJobView[];
+}
+
+export function getClipperPageLimits(): ClipperPageLimits {
+  return {
+    maxUploadBytes: getClipperMaxUploadBytes(),
+    minSourceSeconds: getClipperMinSourceDurationSeconds(),
+    maxSourceSeconds: getClipperMaxSourceDurationSeconds(),
+    minLongEdge: DEFAULT_MIN_SOURCE_LONG_EDGE,
+    minShortEdge: DEFAULT_MIN_SOURCE_SHORT_EDGE,
+    maxLongEdge: DEFAULT_MAX_SOURCE_LONG_EDGE,
+    maxShortEdge: DEFAULT_MAX_SOURCE_SHORT_EDGE,
+    maxPixels: DEFAULT_MAX_SOURCE_PIXELS,
+    maxClips: getClipperMaxClipsPerJob(),
+    creditsPerClip: DEFAULT_CREDIT_COST_PER_CLIP,
+    mimeTypes: ALLOWED_CLIPPER_MIME_TYPES,
+    extensions: ALLOWED_FILE_EXTENSIONS,
+    clipDuration: CLIPPER_CLIP_DURATION_INFO,
+    queueTimeoutMinutes: Math.round(CLIPPER_QUEUE_WAIT_STALE_MS / 60_000),
+  };
+}
+
+async function signedViewsFor(userId: string, record: ClipJobRecord): Promise<ClipJobView> {
+  const signed = new Map<string, { videoUrl: string | null; thumbnailUrl: string | null }>();
+  if (record.status === "COMPLETED") {
+    await Promise.all(
+      record.assets.map(async (a) => {
+        const [videoUrl, thumbnailUrl] = await Promise.all([
+          signClipAsset(userId, a.id, "video").catch(() => null),
+          a.thumbnailKey ? signClipAsset(userId, a.id, "thumbnail").catch(() => null) : Promise.resolve(null),
+        ]);
+        signed.set(a.id, { videoUrl, thumbnailUrl });
+      }),
+    );
+  }
+  return toClipJobView(record, signed);
+}
+
+/** Owner-scoped reads for the page. Signing failures degrade to null URLs, never throw. */
+export async function loadClipperPageData(userId: string, recentLimit = 6): Promise<ClipperPageData> {
+  const [wallet, dailyUsed, active, recent] = await Promise.all([
+    getWalletSummary(userId),
+    countDailyClipJobs(prisma, userId, utcDayRange(new Date())),
+    getActiveClipJobForUser(userId),
+    getRecentCompletedClipJobsForUser(userId, recentLimit),
+  ]);
+  const sw = resolveClipperSubmissionsSwitch(process.env);
+  return {
+    submissions: { enabled: sw.enabled, source: sw.source },
+    limits: getClipperPageLimits(),
+    analysis: CLIPPER_ANALYSIS_CAPABILITIES,
+    balance: wallet.balance,
+    dailyUsed,
+    // The job API does not pass a tier, so every user gets the promotional limit (same as createClipperJob).
+    dailyLimit: getDailyUserClipLimit(),
+    activeJob: active ? toClipJobView(active) : null,
+    recentJobs: await Promise.all(recent.map((r) => signedViewsFor(userId, r))),
+  };
 }
 
 export function clipperMaintenanceDeps(): ClipperMaintenanceDeps {

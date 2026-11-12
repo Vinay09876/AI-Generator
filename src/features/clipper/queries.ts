@@ -124,3 +124,59 @@ export async function getPlatformVideoAsset(userId: string, assetId: string, db:
     sizeBytes: asset.fileSize !== null ? Number(asset.fileSize) : null,
   };
 }
+
+// ---------------------------------------------------------------------------
+// Batch 6: page reads and download lookup (read-only)
+// ---------------------------------------------------------------------------
+const CLIP_JOB_SELECT = {
+  id: true,
+  status: true,
+  createdAt: true,
+  startedAt: true,
+  completedAt: true,
+  errorMessage: true,
+  estimatedCredits: true,
+  chargedCredits: true,
+  settings: true,
+  assets: {
+    orderBy: { createdAt: "asc" as const },
+    select: { id: true, thumbnailKey: true, width: true, height: true, durationSeconds: true },
+  },
+} satisfies Prisma.GenerationJobSelect;
+
+/** The user's newest queued or processing clip job, for cross-device recovery on page load. */
+export async function getActiveClipJobForUser(userId: string, db: Db = prisma): Promise<ClipJobRecord | null> {
+  return db.generationJob.findFirst({
+    where: { userId, type: GenerationType.VIDEO_CLIP, status: { in: ACTIVE } },
+    orderBy: { createdAt: "desc" },
+    select: CLIP_JOB_SELECT,
+  });
+}
+
+/** The user's most recent COMPLETED clip jobs (newest first), for the results gallery. */
+export async function getRecentCompletedClipJobsForUser(userId: string, limit: number, db: Db = prisma): Promise<ClipJobRecord[]> {
+  return db.generationJob.findMany({
+    where: { userId, type: GenerationType.VIDEO_CLIP, status: GenerationStatus.COMPLETED },
+    orderBy: { createdAt: "desc" },
+    take: Math.max(1, Math.min(limit, 12)),
+    select: CLIP_JOB_SELECT,
+  });
+}
+
+/**
+ * Download lookup: the asset must belong to the user, to THIS job, and the job must be a
+ * COMPLETED VIDEO_CLIP job. Returns null for anything else (callers answer 404).
+ */
+export async function getClipAssetForDownload(userId: string, jobId: string, assetId: string, db: Db = prisma) {
+  if (!SEGMENT_REGEX.test(jobId) || !SEGMENT_REGEX.test(assetId)) return null;
+  return db.generatedAsset.findFirst({
+    where: {
+      id: assetId,
+      userId,
+      jobId,
+      type: AssetType.VIDEO,
+      job: { userId, type: GenerationType.VIDEO_CLIP, status: GenerationStatus.COMPLETED },
+    },
+    select: { storageKey: true },
+  });
+}

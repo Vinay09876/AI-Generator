@@ -99,14 +99,22 @@ const isDeleted = (v: unknown): v is { deleted: true } => isObj(v) && v.deleted 
 export const isClipJobBody = (v: unknown): v is ClipJobResponseBody =>
   isObj(v) && isObj(v.job) && typeof v.job.id === "string" && typeof v.job.status === "string" && Array.isArray(v.job.clips);
 
-export const requestUploadIntent = (input: { mimeType: string; sizeBytes: number }, o: ApiOptions = {}) =>
+/** `uploadId` (Batch 7) is browser-chosen and persisted before sending, so a lost response can be recovered. */
+export const requestUploadIntent = (input: { mimeType: string; sizeBytes: number; uploadId?: string }, o: ApiOptions = {}) =>
   call("/api/clipper/uploads", json(input), isIntent, o);
 
 export const completeUpload = (uploadKey: string, o: ApiOptions = {}) =>
   call("/api/clipper/uploads/complete", json({ uploadKey }), isVerified, o);
 
-export const discardUpload = (uploadKey: string, o: ApiOptions = {}) =>
-  call("/api/clipper/uploads/discard", json({ uploadKey }), isDeleted, o);
+/** Release by key, or (Batch 7) by browser-chosen id + MIME type when the key was never received. */
+export const discardUpload = (target: string | { uploadId: string; mimeType: string }, o: ApiOptions = {}) =>
+  call("/api/clipper/uploads/discard", json(typeof target === "string" ? { uploadKey: target } : target), isDeleted, o);
+
+const isReleased = (v: unknown): v is { released: number; kept: number } =>
+  isObj(v) && typeof v.released === "number" && typeof v.kept === "number";
+
+/** Batch 7: release every pending upload of this account that no active job uses. */
+export const releasePendingUploads = (o: ApiOptions = {}) => call("/api/clipper/uploads/release-pending", json({}), isReleased, o);
 
 export function postClipJob(
   input: { idempotencyKey: string; source: ClipJobSource; options: ClipJobOptions; hints?: { durationSeconds: number; width?: number; height?: number } },
@@ -125,3 +133,11 @@ export function postClipJob(
 
 export const getClipJob = (jobId: string, o: ApiOptions = {}) =>
   call(`/api/generations/clip/${encodeURIComponent(jobId)}`, { method: "GET" }, isClipJobBody, o);
+
+/** Cancel + refund a QUEUED job (Batch 6). 409 JOB_ALREADY_STARTED when a worker won the race. */
+export const cancelClipJob = (jobId: string, o: ApiOptions = {}) =>
+  call(`/api/generations/clip/${encodeURIComponent(jobId)}/cancel`, json({}), isClipJobBody, o);
+
+/** Same-origin download route; the server answers 302 → short-lived attachment URL (Batch 6). */
+export const clipDownloadHref = (jobId: string, assetId: string) =>
+  `/api/generations/clip/${encodeURIComponent(jobId)}/clips/${encodeURIComponent(assetId)}/download`;

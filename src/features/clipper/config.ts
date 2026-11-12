@@ -96,17 +96,60 @@ export const DEFAULT_TARGET_CLIP_DURATION_SECONDS = 30;
 /** Maximum number of candidate clips generated per clipping job. */
 export const DEFAULT_MAX_CLIPS_PER_JOB = 3;
 
-/** Maximum video width allowed for input video (1080p width). */
-export const DEFAULT_MAX_SOURCE_WIDTH = 1920;
+/**
+ * Orientation-neutral source dimension limits (Batch 7). Portrait, landscape and square sources
+ * are treated alike: the long edge, the short edge and the total pixel count are bounded, so
+ * 1920×1080, 1080×1920 and 1080×1080 are accepted while 1440p/4K (either orientation) are not.
+ * Dimensions are DISPLAY dimensions (after container rotation is applied).
+ */
+export const DEFAULT_MAX_SOURCE_LONG_EDGE = 1920;
+export const DEFAULT_MAX_SOURCE_SHORT_EDGE = 1080;
+export const DEFAULT_MAX_SOURCE_PIXELS = 1920 * 1080;
+export const DEFAULT_MIN_SOURCE_LONG_EDGE = 480;
+export const DEFAULT_MIN_SOURCE_SHORT_EDGE = 360;
 
-/** Maximum video height allowed for input video (1080p height). */
-export const DEFAULT_MAX_SOURCE_HEIGHT = 1080;
+/** @deprecated Landscape-only names kept for compatibility; use the edge-based limits. */
+export const DEFAULT_MAX_SOURCE_WIDTH = DEFAULT_MAX_SOURCE_LONG_EDGE;
+/** @deprecated */
+export const DEFAULT_MAX_SOURCE_HEIGHT = DEFAULT_MAX_SOURCE_SHORT_EDGE;
+/** @deprecated */
+export const DEFAULT_MIN_SOURCE_WIDTH = DEFAULT_MIN_SOURCE_LONG_EDGE;
+/** @deprecated */
+export const DEFAULT_MIN_SOURCE_HEIGHT = DEFAULT_MIN_SOURCE_SHORT_EDGE;
 
-/** Minimum video width required (480p width). */
-export const DEFAULT_MIN_SOURCE_WIDTH = 480;
+export type SourceOrientation = "portrait" | "landscape" | "square";
 
-/** Minimum video height required (360p height). */
-export const DEFAULT_MIN_SOURCE_HEIGHT = 360;
+export function sourceOrientation(width: number, height: number): SourceOrientation {
+  return width === height ? "square" : height > width ? "portrait" : "landscape";
+}
+
+export type SourceDimensionCheck =
+  | { ok: true; orientation: SourceOrientation }
+  | { ok: false; code: "RESOLUTION_INVALID" | "RESOLUTION_TOO_HIGH" | "RESOLUTION_TOO_LOW"; message: string };
+
+/** Pure, browser-safe. Shared by server validation and the client's local pre-check. */
+export function checkSourceDimensions(width: number, height: number): SourceDimensionCheck {
+  if (!Number.isInteger(width) || !Number.isInteger(height) || width <= 0 || height <= 0) {
+    return { ok: false, code: "RESOLUTION_INVALID", message: `Invalid video dimensions: ${width}x${height}.` };
+  }
+  const long = Math.max(width, height);
+  const short = Math.min(width, height);
+  if (long > DEFAULT_MAX_SOURCE_LONG_EDGE || short > DEFAULT_MAX_SOURCE_SHORT_EDGE || width * height > DEFAULT_MAX_SOURCE_PIXELS) {
+    return {
+      ok: false,
+      code: "RESOLUTION_TOO_HIGH",
+      message: `Video resolution (${width}x${height}) is above the 1080p limit (1920x1080 in any orientation).`,
+    };
+  }
+  if (long < DEFAULT_MIN_SOURCE_LONG_EDGE || short < DEFAULT_MIN_SOURCE_SHORT_EDGE) {
+    return {
+      ok: false,
+      code: "RESOLUTION_TOO_LOW",
+      message: `Video resolution (${width}x${height}) is below the minimum (480x360 in any orientation).`,
+    };
+  }
+  return { ok: true, orientation: sourceOrientation(width, height) };
+}
 
 // ---------------------------------------------------------------------------
 // Dynamic Threshold Resolvers
@@ -327,3 +370,54 @@ export const SUBTITLE_DEFAULTS = {
   marginV: 180, // Vertical margin from bottom
   maxWordsPerSegment: 4,
 } as const;
+
+// ---------------------------------------------------------------------------
+// Batch 6: submission switch, downloads, UI constants
+// ---------------------------------------------------------------------------
+/**
+ * Batch 7 — lost-response reservation recovery.
+ * A browser-chosen upload id (`upl_` + 32 lowercase hex) lets the browser name a reservation it
+ * never heard back about. The server refuses to WRITE a new reservation more than
+ * CLIPPER_UPLOAD_INTENT_DEADLINE_MS after the request arrived; the browser releases an unconfirmed
+ * id only CLIPPER_UPLOAD_ID_RELEASE_DELAY_MS after sending, so a release can never precede a late
+ * reservation write.
+ */
+export const CLIPPER_CLIENT_UPLOAD_ID_REGEX = /^upl_[a-f0-9]{32}$/;
+export const CLIPPER_UPLOAD_INTENT_DEADLINE_MS = 30_000;
+export const CLIPPER_UPLOAD_ID_RELEASE_DELAY_MS = 45_000;
+
+/** Short-lived signed link used by the download redirect route (seconds). */
+export const CLIPPER_DOWNLOAD_URL_EXPIRY_SECONDS = 60;
+
+/** Fixed planner output length shown in the UI (the API has no duration parameter). */
+export const CLIPPER_CLIP_DURATION_INFO = {
+  targetSeconds: DEFAULT_TARGET_CLIP_DURATION_SECONDS,
+  minSeconds: DEFAULT_MIN_CLIP_DURATION_SECONDS,
+  maxSeconds: DEFAULT_MAX_CLIP_DURATION_SECONDS,
+} as const;
+
+export type ClipperSubmissionsSource = "explicit" | "default" | "invalid";
+
+export interface ClipperSubmissionsSwitch {
+  /** Operator switch only. It is NOT evidence that a worker is running. */
+  enabled: boolean;
+  source: ClipperSubmissionsSource;
+}
+
+/**
+ * CLIPPER_SUBMISSIONS_ENABLED — operator-controlled submission switch (Batch 6).
+ *
+ *   production:  ON only for the exact value "true" (case-insensitive, trimmed).
+ *                Missing, empty or any other value → OFF (fails closed).
+ *   otherwise:   missing/empty → ON (local development default); "true" → ON; "false" → OFF;
+ *                any other value is ambiguous → OFF.
+ */
+export function resolveClipperSubmissionsSwitch(env: { CLIPPER_SUBMISSIONS_ENABLED?: string; NODE_ENV?: string }): ClipperSubmissionsSwitch {
+  const raw = env.CLIPPER_SUBMISSIONS_ENABLED;
+  const value = typeof raw === "string" ? raw.trim().toLowerCase() : "";
+  const production = env.NODE_ENV === "production";
+  if (value === "") return { enabled: !production, source: "default" };
+  if (value === "true") return { enabled: true, source: "explicit" };
+  if (value === "false") return { enabled: false, source: "explicit" };
+  return { enabled: false, source: "invalid" };
+}

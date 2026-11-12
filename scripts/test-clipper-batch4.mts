@@ -1112,7 +1112,9 @@ async function run() {
         assert.equal(r.width, CLIPPER_ASPECT_RATIOS[aspect].width);
         assert.equal(r.height, CLIPPER_ASPECT_RATIOS[aspect].height);
         assert.ok(Math.abs(r.durationSeconds - 7) <= 0.5);
-        assert.equal((await sharp(r.thumbnailFilePath!).metadata()).format, "webp");
+        // Read from a buffer: sharp(path) keeps the input file open in libvips cache, which blocks
+        // the later unlink on Windows (test-only artefact; production only writes with toFile).
+        assert.equal((await sharp(await fsp.readFile(r.thumbnailFilePath!)).metadata()).format, "webp");
       } finally {
         await r.cleanup!();
       }
