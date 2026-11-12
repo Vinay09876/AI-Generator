@@ -1,6 +1,7 @@
 import { Coins, RotateCcw, TrendingDown } from "lucide-react";
 import { formatNumber } from "@/lib/format";
 import { CountUp } from "../count-up";
+import { TopUpButton } from "@/components/billing/top-up-button";
 
 type CreditCardProps = {
   balance: number;
@@ -16,9 +17,12 @@ export function CreditCard({ balance, usage }: CreditCardProps) {
       <div aria-hidden className="pointer-events-none absolute -top-20 -right-20 size-56 rounded-full bg-violet/20 blur-3xl" />
       <div aria-hidden className="pointer-events-none absolute -bottom-24 -left-16 size-48 rounded-full bg-cyan/10 blur-3xl" />
 
-      <h2 id="credits-heading" className="relative flex items-center gap-2 text-sm text-muted">
-        <Coins className="size-4 text-violet-300" aria-hidden /> Credit balance
-      </h2>
+      <div className="relative flex items-center justify-between">
+        <h2 id="credits-heading" className="flex items-center gap-2 text-sm text-muted">
+          <Coins className="size-4 text-violet-300" aria-hidden /> Credit balance
+        </h2>
+        <TopUpButton currentBalance={balance} />
+      </div>
       <p className="relative mt-3 font-display text-5xl font-semibold tracking-tight sm:text-6xl">
         <CountUp value={balance} />
       </p>

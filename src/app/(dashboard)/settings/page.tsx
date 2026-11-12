@@ -5,12 +5,13 @@ import { Coins, FileText, KeyRound, ShieldCheck, UserRound } from "lucide-react"
 import { auth } from "@/lib/auth";
 import { ROUTES } from "@/lib/constants";
 import { formatDate, formatNumber } from "@/lib/format";
-import { getCreditUsage, getWalletSummary } from "@/features/credits/queries";
+import { getCreditTransactionsPage, getCreditUsage, getWalletSummary } from "@/features/credits/queries";
 import { getProfile, getSignInMethods } from "@/features/users/queries";
 import { Avatar } from "@/components/dashboard/user-summary";
 import { LogoutButton } from "@/components/dashboard/logout-button";
 import { PageHeader } from "@/components/dashboard/page-header";
 import { RevealGroup, RevealItem } from "@/components/dashboard/reveal";
+import { TransactionLedger } from "@/components/billing/transaction-ledger";
 
 export const metadata: Metadata = { title: "Settings" };
 
@@ -19,11 +20,12 @@ export default async function SettingsPage() {
   const userId = session?.user?.id;
   if (!userId) redirect(ROUTES.login);
 
-  const [profile, methods, wallet, usage] = await Promise.all([
+  const [profile, methods, wallet, usage, ledger] = await Promise.all([
     getProfile(userId),
     getSignInMethods(userId),
     getWalletSummary(userId),
     getCreditUsage(userId),
+    getCreditTransactionsPage(userId, { take: 25 }),
   ]);
   // Missing account is handled by the layout (redirecting to /login here would loop).
   if (!profile) return null;
@@ -67,6 +69,10 @@ export default async function SettingsPage() {
             />
           </dl>
         </Panel>
+      </RevealItem>
+
+      <RevealItem>
+        <TransactionLedger initialItems={ledger.items} walletBalance={wallet.balance} />
       </RevealItem>
 
       <RevealItem>

@@ -57,3 +57,85 @@ export const getCreditUsage = cache(async (userId: string) => {
     refundedAllTime: pick(allTime, CreditTransactionType.REFUND),
   };
 });
+
+export const DEFAULT_LEDGER_PAGE_SIZE = 15;
+
+export type DetailedCreditTransactionItem = {
+  id: string;
+  type: CreditTransactionType;
+  amount: number;
+  balanceAfter: number;
+  description: string | null;
+  createdAt: Date;
+  paymentOrderId: string | null;
+  paymentOrder: {
+    id: string;
+    receipt: string;
+    status: string;
+    currency: string;
+    totalAmountMinor: number;
+    paidAt: Date | null;
+  } | null;
+};
+
+/**
+ * Keyset-paginated ledger query for user credit transactions, including attached payment orders.
+ */
+export async function getCreditTransactionsPage(
+  userId: string,
+  options?: {
+    cursor?: string;
+    take?: number;
+    type?: CreditTransactionType;
+  },
+  client = prisma,
+): Promise<{ items: DetailedCreditTransactionItem[]; nextCursor: string | null }> {
+  const take = options?.take ?? DEFAULT_LEDGER_PAGE_SIZE;
+  const requestedCursor = options?.cursor;
+  const typeFilter = options?.type;
+
+  const cursor = requestedCursor
+    ? (
+        await client.creditTransaction.findFirst({
+          where: { id: requestedCursor, userId, ...(typeFilter ? { type: typeFilter } : {}) },
+          select: { id: true },
+        })
+      )?.id
+    : undefined;
+
+  const items = await client.creditTransaction.findMany({
+    where: {
+      userId,
+      ...(typeFilter ? { type: typeFilter } : {}),
+    },
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+    take: take + 1,
+    ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+    select: {
+      id: true,
+      type: true,
+      amount: true,
+      balanceAfter: true,
+      description: true,
+      createdAt: true,
+      paymentOrderId: true,
+      paymentOrder: {
+        select: {
+          id: true,
+          receipt: true,
+          status: true,
+          currency: true,
+          totalAmountMinor: true,
+          paidAt: true,
+        },
+      },
+    },
+  });
+
+  const hasMore = items.length > take;
+  const page = hasMore ? items.slice(0, take) : items;
+  return {
+    items: page,
+    nextCursor: hasMore ? page[page.length - 1].id : null,
+  };
+}

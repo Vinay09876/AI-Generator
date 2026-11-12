@@ -23,8 +23,9 @@ export const MINOR_UNITS_PER_CURRENCY: Record<PaymentCurrency, number> = {
 export const PROVISIONAL_TAX_ASSUMPTIONS = {
   defaultTaxRatePercent: 18,
   provisionalSacCode: "998314", // Information Technology / Cloud-hosted Digital Services
+  gstInvoiceEnabled: false, // GST tax invoices disabled pending CA review & GSTIN registration
   disclaimer:
-    "Provisional working assumption pending formal Indian Chartered Accountant (CA) or tax legal counsel review. Not statutory tax advice.",
+    "Provisional purchase receipt for development and test billing. Official statutory GST tax invoice issuance is currently disabled pending formal legal entity registration, supplier GSTIN provisioning, and place-of-supply verification by a qualified Chartered Accountant.",
 } as const;
 
 /**
@@ -61,11 +62,15 @@ export const PROVISIONAL_WHOLESALE_COSTS = {
  * Configurable via environment variables or runtime configuration.
  */
 export const INVOICE_CONFIG_DEFAULTS = {
-  supplierLegalName: process.env.INVOICE_SUPPLIER_NAME ?? "YourAI Technologies Private Limited (Provisional)",
-  supplierAddress: process.env.INVOICE_SUPPLIER_ADDRESS ?? "Bangalore, Karnataka, India",
-  supplierGstin: process.env.INVOICE_SUPPLIER_GSTIN ?? "29AAAAA0000A1Z5 (Provisional)",
-  supplierStateCode: process.env.INVOICE_SUPPLIER_STATE_CODE ?? "29",
-  invoicePrefix: process.env.INVOICE_PREFIX ?? "INV",
+  supplierLegalName: process.env.INVOICE_SUPPLIER_NAME ?? "YourAI (Trading Platform)",
+  supplierAddress: process.env.INVOICE_SUPPLIER_ADDRESS ?? "Operations & Cloud Infrastructure",
+  /**
+   * Verified supplier GSTIN. Null until statutory registration.
+   * Fabricated or placeholder GSTINs are strictly prohibited.
+   */
+  supplierGstin: process.env.INVOICE_SUPPLIER_GSTIN ?? null,
+  supplierStateCode: process.env.INVOICE_SUPPLIER_STATE_CODE ?? null,
+  receiptPrefix: process.env.INVOICE_PREFIX ?? "RCPT",
 } as const;
 
 /**

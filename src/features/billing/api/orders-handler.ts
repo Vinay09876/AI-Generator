@@ -158,6 +158,14 @@ export async function handleCreateOrderRequest(
     let gatewayOrderId: string;
     let keyId: string;
 
+    let mockPaymentPayload:
+      | {
+          gatewayOrderId: string;
+          gatewayPaymentId: string;
+          gatewaySignature: string;
+        }
+      | undefined;
+
     if (gateway === "mock") {
       const mockEngine = deps?.mockEngine ?? new MockPaymentGatewayEngine();
       const mockOrder = await mockEngine.createOrder({
@@ -170,6 +178,7 @@ export async function handleCreateOrderRequest(
       });
       gatewayOrderId = mockOrder.gatewayOrderId;
       keyId = "mock_key_public_test";
+      mockPaymentPayload = mockEngine.generatePaymentResponse(gatewayOrderId);
     } else {
       // Future live Razorpay integration (Batch 4/Phase live)
       return NextResponse.json(
@@ -192,6 +201,7 @@ export async function handleCreateOrderRequest(
         creditsAllocated: order.creditsAllocated,
         keyId,
         packageSnapshot: order.packageSnapshot,
+        mockPaymentPayload,
       },
       { status: 201 },
     );
