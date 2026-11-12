@@ -27,3 +27,12 @@ export function formatRelative(date: Date, now = new Date()) {
 
 export const firstName = (name?: string | null) => name?.trim().split(/\s+/)[0] || undefined;
 export const initialOf = (value?: string | null) => (value?.trim().charAt(0) || "?").toUpperCase();
+
+/** Formats byte count to B, KB, or MB. */
+export function formatFileSize(bytes: number | bigint | null | undefined): string {
+  if (bytes === null || bytes === undefined) return "—";
+  const b = typeof bytes === "bigint" ? Number(bytes) : bytes;
+  if (b < 1024) return `${b} B`;
+  if (b < 1024 * 1024) return `${(b / 1024).toFixed(1)} KB`;
+  return `${(b / (1024 * 1024)).toFixed(1)} MB`;
+}

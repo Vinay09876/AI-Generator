@@ -7,6 +7,7 @@ import { utcDayRange } from "@/lib/utc";
 import { getWalletSummary } from "@/features/credits/queries";
 import { PageHeader } from "@/components/dashboard/page-header";
 import { RevealGroup, RevealItem } from "@/components/dashboard/reveal";
+import { StudioNav } from "@/components/dashboard/studio-nav";
 import { getVideoCreditCost } from "@/features/video/config";
 import { resolveUserVideoEntitlement } from "@/features/video/auth";
 import { countDailyVideoJobs } from "@/features/video/lifecycle";
@@ -55,6 +56,7 @@ export default async function AiVideoPage() {
   return (
     <RevealGroup className="space-y-6">
       <RevealItem>
+        <StudioNav className="mb-6" />
         {/* Header Bar */}
         <div className="mx-auto flex w-full max-w-2xl flex-col gap-4 sm:flex-row sm:items-end sm:justify-between xl:max-w-none">
           <PageHeader

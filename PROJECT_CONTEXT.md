@@ -1634,5 +1634,41 @@ model PaymentWebhookEvent {
     - In accordance with Next.js 15+ request storage boundaries, handlers support optional dependency injection (`BillingHandlerDeps`) for authenticated user resolution, database client injection, and package catalog configuration during standalone unit/integration test runs.
     - Live Razorpay credentials and webhook signature verification for production endpoints remain disabled pending official merchant verification and live credential provisioning.
 - **Batch 4**: Unified Dashboard Navigation, Global Active Job Ribbon & Cross-Tool Media History.
+  - **Status**: ✅ Complete & Verified.
+  - **Deliverables**:
+    - `src/features/generations/queries.ts`:
+      - Added `getActiveStudioJob(userId, client)`: Queries user's active jobs across all generation modalities (`IMAGE`, `VIDEO`, `VIDEO_CLIP`) in status `PENDING` or `PROCESSING`. Orders by `createdAt desc, id desc` to surface the latest active job in O(1) query time.
+      - Added `getUnifiedHistoryPage(userId, { type, cursor, take }, client)`: Unifies media history across all generation modalities, returning jobs with attached `assets` metadata (`id`, `width`, `height`, `durationSeconds`, `mimeType`, `fileSize`, `thumbnailKey`), supporting keyset cursor pagination and type filtering.
+    - `src/components/dashboard/studio-nav.tsx`:
+      - Glassmorphic cross-studio navigation bar (`StudioNav`) switching between `/ai-image` (FLUX.1 Schnell, 1 cr), `/ai-video` (Wan 2.1, 10 cr), and `/video-clipper` (Smart Cut, 5 cr/clip).
+      - Detects active pathname with `aria-current="page"` and highlights route with vibrant glow.
+      - Embedded prominently in `ai-image/page.tsx`, `ai-video/page.tsx`, and `video-clipper/page.tsx`.
+    - `src/components/dashboard/active-job-ribbon.tsx`:
+      - Global in-progress active studio job banner (`ActiveJobRibbon`).
+      - Renders pulsing indicator (queued vs rendering), tool icon, model badge, truncated prompt excerpt, cross-stage 1-active-job limit notice, "Open Studio" CTA with animated spinner, and dismiss control.
+    - `src/app/(dashboard)/layout.tsx`:
+      - Layout server component updated to query `getActiveStudioJob(userId)` in parallel with profile and wallet summary, rendering `<ActiveJobRibbon job={activeJob} />` globally above all dashboard child views.
+    - `src/components/dashboard/media-gallery-card.tsx`:
+      - Visual media gallery card displaying generated media with short-lived signed URL redirects (`/api/assets/[assetId]` for images, `/api/generations/clip/[jobId]/clips/[assetId]/download` for clips, and direct studio link for videos).
+      - Displays resolution (`width × height`), duration (seconds), file size (`formatFileSize`), status badges, credit consumption, and action links.
+    - `src/app/(dashboard)/history/page.tsx`:
+      - Integrated view mode toggle between List view (`LayoutList` / `JobRow`) and Gallery grid view (`LayoutGrid` / `MediaGalleryCard`).
+      - URL query parameter `?view=gallery` | `?view=list` with state preservation across type filters and keyset pagination.
+    - `src/components/dashboard/overview/quick-actions.tsx`:
+      - Enhanced overview cards with tool badges (`FLUX.1 Schnell`, `Wan 2.1`, `Smart Cut`) and cost indicators (`1 cr`, `10 cr`, `5 cr/clip`).
+    - `src/lib/format.ts`:
+      - Added `formatFileSize(bytes)` supporting numbers, bigints, and units (B, KB, MB).
+    - `scripts/test-dashboard-batch4.mts`:
+      - 64/64 tests passing covering:
+        - Active studio job resolution across all 3 generation types and terminal transitions.
+        - User isolation on active jobs and history queries.
+        - Unified history query with attached assets and keyset pagination.
+        - Studio navigation items, routes, and badge metadata.
+        - Media formatting utilities.
+        - Cross-tool duration incompatibility guard (Wan 2.1 5s vs Video Clipper min 15s).
+  - **Decisions & Limitations Recorded**:
+    - Direct video-to-clipper pipeline remains decoupled in navigation and history: Wan 2.1 outputs 5.0s video clips, while Video Clipper requires a minimum of 15.0s source video (`DEFAULT_MIN_SOURCE_DURATION_SECONDS = 15.0`). Cross-tool piping is explicitly deferred; tools are unified through shared studio navigation and common asset history.
+    - Asset storage keys are never exposed to client code; all media previews and downloads route through authenticated owner-checked redirect endpoints returning short-lived signed URLs.
+    - ₹0 spend strictly maintained; zero external cloud mutations or live payment calls.
 - **Batch 5**: Credit Store Modal, Detailed Transaction Ledger View & Tax Invoice Receipt UI.
 - **Batch 6**: Legal Policy Updates, Operator Payment Reconciliation Tooling & Full Regression.

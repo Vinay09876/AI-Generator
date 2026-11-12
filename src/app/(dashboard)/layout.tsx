@@ -3,10 +3,12 @@ import { auth } from "@/lib/auth";
 import { ROUTES } from "@/lib/constants";
 import { getWalletSummary } from "@/features/credits/queries";
 import { getProfile } from "@/features/users/queries";
+import { getActiveStudioJob } from "@/features/generations/queries";
 import { MobileNav } from "@/components/dashboard/mobile-nav";
 import { Sidebar } from "@/components/dashboard/sidebar";
 import { LogoutButton } from "@/components/dashboard/logout-button";
 import { MotionProvider } from "@/components/ui/motion-provider";
+import { ActiveJobRibbon } from "@/components/dashboard/active-job-ribbon";
 
 /**
  * Authoritative guard for every (dashboard) route. proxy.ts redirects early,
@@ -17,7 +19,11 @@ export default async function DashboardLayout({ children }: Readonly<{ children:
   const userId = session?.user?.id;
   if (!userId) redirect(ROUTES.login);
 
-  const [profile, { balance }] = await Promise.all([getProfile(userId), getWalletSummary(userId)]);
+  const [profile, { balance }, activeJob] = await Promise.all([
+    getProfile(userId),
+    getWalletSummary(userId),
+    getActiveStudioJob(userId),
+  ]);
 
   // Valid session cookie but the account no longer exists. Redirecting to /login would
   // loop (the proxy sends signed-in users back here), so offer an explicit sign-out.
@@ -44,6 +50,7 @@ export default async function DashboardLayout({ children }: Readonly<{ children:
         <div className="min-w-0 flex-1">
           <MobileNav user={user} balance={balance} />
           <main id="main-content" className="mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-10 lg:px-10 lg:py-12">
+            <ActiveJobRibbon job={activeJob} />
             {children}
           </main>
         </div>

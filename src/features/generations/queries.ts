@@ -1,5 +1,5 @@
 import { cache } from "react";
-import { GenerationStatus, GenerationType } from "@/generated/prisma/client";
+import { GenerationStatus, GenerationType, type Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
 
 const jobListSelect = {
@@ -177,6 +177,106 @@ export async function getJobsPage(
     take: take + 1,
     ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
     select: jobListSelect,
+  });
+
+  const hasMore = items.length > take;
+  const page = hasMore ? items.slice(0, take) : items;
+  return { items: page, nextCursor: hasMore ? page[page.length - 1].id : null };
+}
+
+const unifiedJobSelect = {
+  id: true,
+  type: true,
+  status: true,
+  prompt: true,
+  settings: true,
+  estimatedCredits: true,
+  chargedCredits: true,
+  errorMessage: true,
+  createdAt: true,
+  startedAt: true,
+  completedAt: true,
+  assets: {
+    select: {
+      id: true,
+      width: true,
+      height: true,
+      durationSeconds: true,
+      mimeType: true,
+      fileSize: true,
+      thumbnailKey: true,
+    },
+    take: 4,
+  },
+} as const;
+
+export type UnifiedHistoryItem = Prisma.GenerationJobGetPayload<{
+  select: typeof unifiedJobSelect;
+}>;
+
+export interface ActiveStudioJobSummary {
+  id: string;
+  type: GenerationType;
+  status: GenerationStatus;
+  prompt: string | null;
+  createdAt: Date;
+  startedAt: Date | null;
+}
+
+/**
+ * Returns the user's active studio generation job (PENDING or PROCESSING) across
+ * all generation types (IMAGE, VIDEO, VIDEO_CLIP), or null if none active.
+ */
+export async function getActiveStudioJob(
+  userId: string,
+  client = prisma,
+): Promise<ActiveStudioJobSummary | null> {
+  const job = await client.generationJob.findFirst({
+    where: {
+      userId,
+      status: { in: [GenerationStatus.PENDING, GenerationStatus.PROCESSING] },
+    },
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+    select: {
+      id: true,
+      type: true,
+      status: true,
+      prompt: true,
+      createdAt: true,
+      startedAt: true,
+    },
+  });
+
+  return job ?? null;
+}
+
+/**
+ * Unified media history page query with attached asset metadata for visual gallery and list view.
+ */
+export async function getUnifiedHistoryPage(
+  userId: string,
+  {
+    type,
+    cursor: requestedCursor,
+    take = HISTORY_PAGE_SIZE,
+  }: { type?: GenerationType; cursor?: string; take?: number },
+  client = prisma,
+) {
+  const cursor = requestedCursor
+    ? (
+        await client.generationJob.findFirst({
+          where: { id: requestedCursor, userId, ...(type ? { type } : {}) },
+          select: { id: true },
+        })
+      )?.id
+    : undefined;
+
+  const items = await client.generationJob.findMany({
+    where: { userId, ...(type ? { type } : {}) },
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+    take: take + 1,
+    ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+    select: unifiedJobSelect,
   });
 
   const hasMore = items.length > take;

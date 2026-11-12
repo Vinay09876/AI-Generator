@@ -4,6 +4,7 @@ import { auth } from "@/lib/auth";
 import { ROUTES } from "@/lib/constants";
 import { PageHeader } from "@/components/dashboard/page-header";
 import { RevealGroup, RevealItem } from "@/components/dashboard/reveal";
+import { StudioNav } from "@/components/dashboard/studio-nav";
 import { VideoClipper } from "@/components/video-clipper/video-clipper";
 import { loadClipperPageData } from "@/features/clipper/service";
 
@@ -24,6 +25,7 @@ export default async function VideoClipperPage() {
   return (
     <RevealGroup className="space-y-6">
       <RevealItem>
+        <StudioNav className="mb-6" />
         <PageHeader
           title="AI Video Clipper"
           description="Upload a video and get short clips cut at scene changes, reframed for vertical, square or landscape."

@@ -1,15 +1,16 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { ArrowLeft, ArrowRight, History as HistoryIcon } from "lucide-react";
+import { ArrowLeft, ArrowRight, History as HistoryIcon, LayoutGrid, LayoutList } from "lucide-react";
 import type { GenerationType } from "@/generated/prisma/client";
 import { auth } from "@/lib/auth";
 import { APP_ROUTES, ROUTES } from "@/lib/constants";
 import { formatNumber } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import { getJobsPage, getUsageStats } from "@/features/generations/queries";
+import { getUnifiedHistoryPage, getUsageStats } from "@/features/generations/queries";
 import { GENERATION_TYPE_META, parseTypeFilter } from "@/features/generations/meta";
 import { JobRow } from "@/components/dashboard/job-row";
+import { MediaGalleryCard } from "@/components/dashboard/media-gallery-card";
 import { PageHeader } from "@/components/dashboard/page-header";
 import { RevealGroup, RevealItem } from "@/components/dashboard/reveal";
 
@@ -18,10 +19,11 @@ export const metadata: Metadata = { title: "History" };
 // Job ids are cuids; anything else in the URL is ignored rather than sent to the database.
 const CURSOR_PATTERN = /^[a-z0-9]{20,40}$/i;
 
-function historyHref(params: { type?: GenerationType; cursor?: string }) {
+function historyHref(params: { type?: GenerationType; cursor?: string; view?: "list" | "gallery" }) {
   const search = new URLSearchParams();
   if (params.type) search.set("type", GENERATION_TYPE_META[params.type].filter);
   if (params.cursor) search.set("cursor", params.cursor);
+  if (params.view && params.view !== "list") search.set("view", params.view);
   const qs = search.toString();
   return qs ? `${APP_ROUTES.history}?${qs}` : APP_ROUTES.history;
 }
@@ -29,7 +31,7 @@ function historyHref(params: { type?: GenerationType; cursor?: string }) {
 export default async function HistoryPage({
   searchParams,
 }: {
-  searchParams: Promise<{ type?: string | string[]; cursor?: string | string[] }>;
+  searchParams: Promise<{ type?: string | string[]; cursor?: string | string[]; view?: string | string[] }>;
 }) {
   const session = await auth();
   const userId = session?.user?.id;
@@ -39,8 +41,13 @@ export default async function HistoryPage({
   const type = parseTypeFilter(Array.isArray(params.type) ? params.type[0] : params.type);
   const rawCursor = Array.isArray(params.cursor) ? params.cursor[0] : params.cursor;
   const cursor = rawCursor && CURSOR_PATTERN.test(rawCursor) ? rawCursor : undefined;
+  const rawView = Array.isArray(params.view) ? params.view[0] : params.view;
+  const view: "list" | "gallery" = rawView === "gallery" ? "gallery" : "list";
 
-  const [stats, page] = await Promise.all([getUsageStats(userId), getJobsPage(userId, { type, cursor })]);
+  const [stats, page] = await Promise.all([
+    getUsageStats(userId),
+    getUnifiedHistoryPage(userId, { type, cursor }),
+  ]);
 
   const tabs: { label: string; type?: GenerationType; count: number }[] = [
     { label: "All", count: stats.total },
@@ -58,52 +65,100 @@ export default async function HistoryPage({
       </RevealItem>
 
       <RevealItem>
-        <nav aria-label="Filter by type" className="-mx-1 overflow-x-auto px-1">
-          <ul className="flex w-max gap-1 rounded-2xl border border-white/[0.08] bg-surface p-1">
-            {tabs.map((tab) => {
-              const active = tab.type === type;
-              return (
-                <li key={tab.label}>
-                  <Link
-                    href={historyHref({ type: tab.type })}
-                    aria-current={active ? "page" : undefined}
-                    className={cn(
-                      "inline-flex h-9 items-center gap-2 rounded-xl px-3.5 text-sm transition-colors",
-                      "focus-visible:outline-2 focus-visible:outline-violet",
-                      active
-                        ? "bg-white/[0.08] text-foreground shadow-[inset_0_0_0_1px_rgb(255_255_255/0.08)]"
-                        : "text-muted hover:text-foreground",
-                    )}
-                  >
-                    {tab.label}
-                    <span
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <nav aria-label="Filter by type" className="-mx-1 overflow-x-auto px-1">
+            <ul className="flex w-max gap-1 rounded-2xl border border-white/[0.08] bg-surface p-1">
+              {tabs.map((tab) => {
+                const active = tab.type === type;
+                return (
+                  <li key={tab.label}>
+                    <Link
+                      href={historyHref({ type: tab.type, view, cursor: undefined })}
+                      aria-current={active ? "page" : undefined}
                       className={cn(
-                        "rounded-full px-1.5 text-[11px] tabular-nums",
-                        active ? "bg-violet/25 text-violet-100" : "bg-white/[0.06] text-muted",
+                        "inline-flex h-9 items-center gap-2 rounded-xl px-3.5 text-sm transition-colors",
+                        "focus-visible:outline-2 focus-visible:outline-violet",
+                        active
+                          ? "bg-white/[0.08] text-foreground shadow-[inset_0_0_0_1px_rgb(255_255_255/0.08)]"
+                          : "text-muted hover:text-foreground",
                       )}
                     >
-                      {formatNumber(tab.count)}
-                    </span>
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
-        </nav>
+                      {tab.label}
+                      <span
+                        className={cn(
+                          "rounded-full px-1.5 text-[11px] tabular-nums",
+                          active ? "bg-violet/25 text-violet-100" : "bg-white/[0.06] text-muted",
+                        )}
+                      >
+                        {formatNumber(tab.count)}
+                      </span>
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          </nav>
+
+          {/* View Mode Switcher (List vs Gallery) */}
+          <div
+            role="group"
+            aria-label="View layout"
+            className="flex items-center gap-1 self-start rounded-2xl border border-white/[0.08] bg-surface p-1 sm:self-auto"
+          >
+            <Link
+              href={historyHref({ type, view: "list", cursor })}
+              title="List view"
+              aria-label="List view"
+              aria-current={view === "list" ? "true" : undefined}
+              className={cn(
+                "grid size-9 place-items-center rounded-xl transition-colors",
+                "focus-visible:outline-2 focus-visible:outline-violet",
+                view === "list"
+                  ? "bg-white/[0.08] text-foreground shadow-[inset_0_0_0_1px_rgb(255_255_255/0.08)]"
+                  : "text-muted hover:text-foreground",
+              )}
+            >
+              <LayoutList className="size-4" aria-hidden />
+            </Link>
+            <Link
+              href={historyHref({ type, view: "gallery", cursor })}
+              title="Gallery view"
+              aria-label="Gallery view"
+              aria-current={view === "gallery" ? "true" : undefined}
+              className={cn(
+                "grid size-9 place-items-center rounded-xl transition-colors",
+                "focus-visible:outline-2 focus-visible:outline-violet",
+                view === "gallery"
+                  ? "bg-white/[0.08] text-foreground shadow-[inset_0_0_0_1px_rgb(255_255_255/0.08)]"
+                  : "text-muted hover:text-foreground",
+              )}
+            >
+              <LayoutGrid className="size-4" aria-hidden />
+            </Link>
+          </div>
+        </div>
       </RevealItem>
 
       <RevealItem>
-        <section aria-label="Generations" className="rounded-3xl border border-white/[0.08] bg-surface p-3 sm:p-4">
-          {page.items.length === 0 ? (
+        {page.items.length === 0 ? (
+          <section aria-label="Generations" className="rounded-3xl border border-white/[0.08] bg-surface p-3 sm:p-4">
             <HistoryEmpty hasAny={stats.total > 0} filtered={Boolean(type)} paged={Boolean(cursor)} type={type} />
-          ) : (
+          </section>
+        ) : view === "gallery" ? (
+          <section aria-label="Generations gallery" className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {page.items.map((job) => (
+              <MediaGalleryCard key={job.id} job={job} />
+            ))}
+          </section>
+        ) : (
+          <section aria-label="Generations list" className="rounded-3xl border border-white/[0.08] bg-surface p-3 sm:p-4">
             <ul className="divide-y divide-white/[0.04]">
               {page.items.map((job) => (
                 <JobRow key={job.id} job={job} />
               ))}
             </ul>
-          )}
-        </section>
+          </section>
+        )}
       </RevealItem>
 
       {(cursor || page.nextCursor) && (
@@ -111,7 +166,7 @@ export default async function HistoryPage({
           <nav aria-label="Pagination" className="flex items-center justify-between gap-3">
             {cursor ? (
               <Link
-                href={historyHref({ type })}
+                href={historyHref({ type, view })}
                 className="inline-flex h-10 items-center gap-2 rounded-full px-4 text-sm text-muted ring-1 ring-white/10 transition-colors hover:bg-white/[0.05] hover:text-foreground"
               >
                 <ArrowLeft className="size-4" aria-hidden /> Back to newest
@@ -121,7 +176,7 @@ export default async function HistoryPage({
             )}
             {page.nextCursor && (
               <Link
-                href={historyHref({ type, cursor: page.nextCursor })}
+                href={historyHref({ type, view, cursor: page.nextCursor })}
                 className="group inline-flex h-10 items-center gap-2 rounded-full bg-white/[0.06] px-4 text-sm text-foreground ring-1 ring-white/10 transition-colors hover:bg-white/[0.1]"
               >
                 Older generations

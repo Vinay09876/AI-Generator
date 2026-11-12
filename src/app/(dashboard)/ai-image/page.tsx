@@ -11,6 +11,7 @@ import { countDailyImageJobs } from "@/features/generations/lifecycle";
 import { getActiveImageJob, getRecentImageJobs } from "@/features/generations/queries";
 import { PageHeader } from "@/components/dashboard/page-header";
 import { RevealGroup, RevealItem } from "@/components/dashboard/reveal";
+import { StudioNav } from "@/components/dashboard/studio-nav";
 import { DailyUsage } from "@/components/image-generator/daily-usage";
 import { ImageGenerator } from "@/components/image-generator/image-generator";
 
@@ -35,6 +36,7 @@ export default async function AiImagePage() {
   return (
     <RevealGroup className="space-y-6">
       <RevealItem>
+        <StudioNav className="mb-6" />
         {/* Aligned with the generator's centred single column below xl. */}
         <div className="mx-auto flex w-full max-w-2xl flex-col gap-4 sm:flex-row sm:items-end sm:justify-between xl:max-w-none">
           <PageHeader title="AI Image Generator" description="Describe an image and generate it in seconds." />

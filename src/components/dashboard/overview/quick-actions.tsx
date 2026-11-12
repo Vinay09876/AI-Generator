@@ -5,23 +5,36 @@ import { GENERATION_TYPE_META } from "@/features/generations/meta";
 import { formatNumber } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
-const ACTIONS: { type: GenerationType; title: string; description: string; glow: string }[] = [
+const ACTIONS: {
+  type: GenerationType;
+  title: string;
+  description: string;
+  badge: string;
+  costLabel: string;
+  glow: string;
+}[] = [
   {
     type: "IMAGE",
     title: "Generate an image",
     description: "Turn a prompt into polished visuals.",
+    badge: "FLUX.1 Schnell",
+    costLabel: "1 cr",
     glow: "from-violet/25",
   },
   {
     type: "VIDEO",
     title: "Create a video",
     description: "Describe a scene and render a short clip.",
+    badge: "Wan 2.1",
+    costLabel: "10 cr",
     glow: "from-fuchsia/25",
   },
   {
     type: "VIDEO_CLIP",
     title: "Clip a video",
     description: "Find highlights in long recordings.",
+    badge: "Smart Cut",
+    costLabel: "5 cr/clip",
     glow: "from-cyan/20",
   },
 ];
@@ -33,7 +46,7 @@ export function QuickActions({ counts }: { counts: Record<GenerationType, number
         Start creating
       </h2>
       <ul className="mt-4 grid gap-4 sm:grid-cols-3">
-        {ACTIONS.map(({ type, title, description, glow }) => {
+        {ACTIONS.map(({ type, title, description, badge, costLabel, glow }) => {
           const meta = GENERATION_TYPE_META[type];
           const Icon = meta.icon;
           return (
@@ -62,12 +75,22 @@ export function QuickActions({ counts }: { counts: Record<GenerationType, number
                   >
                     <Icon className="size-5" aria-hidden />
                   </span>
-                  <ArrowUpRight
-                    className="size-4 text-muted transition-[transform,color] duration-300 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 group-hover:text-foreground"
-                    aria-hidden
-                  />
+                  <div className="flex items-center gap-1.5">
+                    <span className="rounded-full bg-white/[0.06] px-2 py-0.5 text-[10px] font-semibold text-muted">
+                      {costLabel}
+                    </span>
+                    <ArrowUpRight
+                      className="size-4 text-muted transition-[transform,color] duration-300 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 group-hover:text-foreground"
+                      aria-hidden
+                    />
+                  </div>
                 </div>
-                <h3 className="relative mt-5 font-medium">{title}</h3>
+                <div className="relative mt-4 flex items-center gap-2">
+                  <h3 className="font-medium">{title}</h3>
+                  <span className="rounded-full bg-white/[0.04] px-1.5 py-0.5 text-[10px] text-muted/70">
+                    {badge}
+                  </span>
+                </div>
                 <p className="relative mt-1 text-sm text-muted">{description}</p>
                 <p className="relative mt-4 text-xs text-muted">
                   {counts[type] > 0 ? `${formatNumber(counts[type])} created` : "Nothing created yet"}
