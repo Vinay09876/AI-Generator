@@ -40,7 +40,7 @@ async function scenario(name, fn) {
   } catch (e) {
     results.push({ name, ok: false, ms: Date.now() - t0, error: String(e?.message ?? e).slice(0, 600) });
     console.error(`FAIL  ${name}: ${String(e?.message ?? e).slice(0, 600)}`);
-    for (const p of pages) await p.screenshot({ path: path.join(ART, `fail-${results.length}-${pages.indexOf(p)}.png`), fullPage: true }).catch(() => {});
+    for (const p of pages) await p.screenshot({ path: path.join(ART, `fail-${results.length}-${pages.indexOf(p)}.png`), fullPage: true }).catch(() => { });
   }
 }
 const assert = (c, m) => {
@@ -105,7 +105,17 @@ async function waitStatus(page, re, ms, what) {
   await until(async () => re.test((await status(page)) ?? ""), ms, `${what} (status /${re.source}/)`);
 }
 async function chooseFile(page, file) {
-  await page.locator('input[type="file"]').setInputFiles(path.join(FIX, file));
+  const filePath = path.join(FIX, file);
+  const input = page.locator('input[type="file"]');
+  const removeBtn = page.getByRole("button", { name: "Remove this video" });
+  await input.setInputFiles(filePath);
+  try {
+    await removeBtn.waitFor({ state: "visible", timeout: 3000 });
+  } catch {
+    // React may have hydrated after the first file event was dispatched: re-dispatch once
+    await input.setInputFiles(filePath);
+    await removeBtn.waitFor({ state: "visible", timeout: 17_000 });
+  }
 }
 async function ensureNoActiveJob(page, uid) {
   const rows = (await db.query(`select id, status from "GenerationJob" where "userId"=$1 and status in ('PENDING','PROCESSING')`, [uid])).rows;
@@ -120,7 +130,6 @@ async function ensureNoActiveJob(page, uid) {
 async function fresh(page) {
   await page.goto(`${BASE}/video-clipper`);
   await page.locator('input[type="file"]').waitFor({ state: "attached", timeout: 15_000 });
-  await page.waitForLoadState("networkidle").catch(() => {});
 }
 async function generate(page) {
   const btn = page.locator('button[type="submit"]', { hasText: /Generate/ });
@@ -234,7 +243,7 @@ try {
     await ensureNoActiveJob(page, A.id);
     await fresh(page);
     await chooseFile(page, "landscape-1920x1080.mp4");
-    await page.locator("main").getByText(/0:24/).first().waitFor({ timeout: 20_000 });
+    await page.getByText(/1920×1080/).first().waitFor({ timeout: 15_000 });
     let hits = 0;
     const ids = new Set();
     const routeHandler = async (route) => {
@@ -270,7 +279,7 @@ try {
     assert(orphan === 201, `orphan reservation created (${orphan})`);
     await fresh(page);
     await chooseFile(page, "landscape-1920x1080.mp4");
-    await page.locator("main").getByText(/0:24/).first().waitFor({ timeout: 20_000 });
+    await page.getByText(/1920×1080/).first().waitFor({ timeout: 15_000 });
     await page.locator('input[name="clip-count"][value="2"]').check({ force: true });
     await page.locator('input[name="clip-aspect"][value="9:16"]').check({ force: true });
     await generate(page);
@@ -326,7 +335,8 @@ try {
     await page.evaluate(async () => {
       const v = document.querySelector("article video");
       v.muted = true;
-      v.dispatchEvent(new Event("error"));
+      v.load();
+      await v.play().catch(() => { });
     });
     await until(async () => (await page.locator("article video").first().getAttribute("src")) !== before, 30_000, "new signed src");
     const play = await page.evaluate(async () => {
@@ -408,9 +418,9 @@ try {
     assert(sw.sw <= sw.iw, `no horizontal overflow (${sw.sw} > ${sw.iw})`);
     await m.screenshot({ path: path.join(ART, "08-mobile.png"), fullPage: true });
 
-    await fresh(page);
+    await page.goto(`${BASE}/video-clipper`);
     await chooseFile(page, "square-1080x1080.mp4");
-    await page.locator("main").getByText(/0:24/).first().waitFor({ timeout: 20_000 });
+    await page.getByText(/1080×1080/).first().waitFor({ timeout: 15_000 });
     await page.locator("body").focus();
     const seen = [];
     for (let i = 0; i < 80; i++) {
