@@ -576,6 +576,19 @@ async function runAllTests(): Promise<void> {
     assert(orderBody.creditsAllocated === 100, "Allocates 100 credits");
     assert(Boolean(orderBody.mockPaymentPayload), "mockPaymentPayload delivered in mock mode");
 
+    // Verify PaymentOrder record integrity when isRegisteredForGst === false
+    const createdOrder = db.orders.get(orderBody.orderId);
+    assert(createdOrder.totalAmountMinor === 5000, "createdOrder totalAmountMinor is authoritative package price (5000)");
+    assert(createdOrder.baseAmountMinor === 5000, "createdOrder baseAmountMinor is full package price (5000)");
+    assert(createdOrder.taxAmountMinor === 0, "createdOrder taxAmountMinor is 0 when supplier unregistered");
+
+    // Verify immutable package snapshot consistency
+    const snapshot = createdOrder.packageSnapshot as any;
+    assert(snapshot.amountMinor === 5000, "packageSnapshot amountMinor matches package price (5000)");
+    assert(snapshot.taxRatePercent === 0, "packageSnapshot taxRatePercent is 0 when supplier unregistered");
+    assert(snapshot.isTaxInclusive === false, "packageSnapshot isTaxInclusive is false when supplier unregistered");
+    assert(snapshot.creditsAllocated === 100, "packageSnapshot creditsAllocated matches package (100)");
+
     const { gatewayOrderId, gatewayPaymentId, gatewaySignature } = orderBody.mockPaymentPayload;
     assert(Boolean(gatewayOrderId), "mock gatewayOrderId present");
     assert(Boolean(gatewayPaymentId), "mock gatewayPaymentId present");
@@ -620,10 +633,24 @@ async function runAllTests(): Promise<void> {
     const updatedOrder = db.orders.get(orderBody.orderId);
     assert(updatedOrder.status === PaymentOrderStatus.PAID, "Order transitioned to PAID");
 
-    // 4.5 Generate official tax invoice for newly settled order
+    // 4.5 Generate provisional receipt for newly settled order
     const newInvoice = buildTaxInvoice(updatedOrder, db.users.get("usr_alice")!);
-    assert(newInvoice.orderId === orderBody.orderId, "Invoice generated for new order");
-    assert(newInvoice.payment.status === "PAID", "Invoice payment status is PAID");
+    assert(newInvoice.orderId === orderBody.orderId, "Receipt generated for new order");
+    assert(newInvoice.payment.status === "PAID", "Receipt payment status is PAID");
+    assert(newInvoice.documentTitle === "Provisional Purchase Receipt", "Document title is Provisional Purchase Receipt");
+    assert(newInvoice.merchant.isRegisteredForGst === false, "Merchant not registered for GST");
+    assert(newInvoice.summary.totalAmountMinor === 5000, "Receipt total amount matches order (5000 paise)");
+    assert(newInvoice.summary.subtotalMinor === 5000, "Receipt subtotal matches order full price (5000 paise)");
+    assert(newInvoice.summary.totalTaxMinor === 0, "Receipt total tax is 0");
+    assert(newInvoice.summary.formattedTotalAmount === "₹50.00", "Formatted total is ₹50.00");
+    assert(newInvoice.summary.formattedSubtotal === "₹50.00", "Formatted subtotal is ₹50.00");
+    assert(newInvoice.summary.formattedTotalTax === "₹0.00", "Formatted tax is ₹0.00");
+    assert(newInvoice.summary.cgstMinor === 0, "CGST is 0");
+    assert(newInvoice.summary.sgstMinor === 0, "SGST is 0");
+    assert(newInvoice.summary.igstMinor === 0, "IGST is 0");
+    assert(newInvoice.lineItems[0].formattedBaseAmount === "₹50.00", "Line item base is ₹50.00");
+    assert(newInvoice.lineItems[0].formattedTotalAmount === "₹50.00", "Line item total is ₹50.00");
+    assert(newInvoice.statutoryNotice.includes("no GST is charged or collected"), "Receipt statutory notice disclaims GST collection");
   });
 
   await runSection("5. Non-PAID Order Invoice Restriction", () => {

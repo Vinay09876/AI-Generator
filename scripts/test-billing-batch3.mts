@@ -466,23 +466,23 @@ await runSection("Order Creation API Handler Rules", async () => {
   const badPkgJson = await badPkgRes.json();
   assert(badPkgJson.code === "INVALID_PACKAGE", "Returns code INVALID_PACKAGE");
 
-  // 5. Request Body Validation: Unknown packageId
-  const unknownPkgReq = new Request("https://yourai.example/api/billing/orders", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ packageId: "PKG_NON_EXISTENT_999" }),
-  });
+    // 5. Request Body Validation: Unknown packageId
+    const unknownPkgReq = new Request("https://yourai.example/api/billing/orders", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ packageId: "PKG_NON_EXISTENT_999" }),
+    });
   const unknownPkgRes = await handleCreateOrderRequest(unknownPkgReq, deps);
   assert(unknownPkgRes.status === 400, "Unknown packageId returns HTTP 400");
   const unknownPkgJson = await unknownPkgRes.json();
   assert(unknownPkgJson.code === "UNKNOWN_PACKAGE", "Returns code UNKNOWN_PACKAGE");
 
-  // 6. Request Body Validation: Disabled packageId
-  const disabledPkgReq = new Request("https://yourai.example/api/billing/orders", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ packageId: "PKG_DISABLED_TEST" }),
-  });
+    // 6. Request Body Validation: Disabled packageId
+    const disabledPkgReq = new Request("https://yourai.example/api/billing/orders", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ packageId: "PKG_DISABLED_TEST" }),
+    });
   const disabledPkgRes = await handleCreateOrderRequest(disabledPkgReq, deps);
   assert(disabledPkgRes.status === 400, "Disabled packageId returns HTTP 400");
   const disabledPkgJson = await disabledPkgRes.json();

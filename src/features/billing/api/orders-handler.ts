@@ -22,6 +22,10 @@ import {
   type PaymentCurrency,
 } from "../types";
 import {
+  INVOICE_CONFIG_DEFAULTS,
+  PROVISIONAL_TAX_ASSUMPTIONS,
+} from "../config";
+import {
   resolveServerCreditPackage,
   createPackagePricingSnapshot,
   type BillingCreditPackage,
@@ -33,6 +37,7 @@ export interface BillingHandlerDeps {
   dbClient?: any;
   mockEngine?: MockPaymentGatewayEngine;
   packageCatalog?: Record<string, BillingCreditPackage>;
+  isRegisteredForGst?: boolean;
 }
 
 export interface CreateOrderRequestBody {
@@ -130,8 +135,20 @@ export async function handleCreateOrderRequest(
   }
 
   try {
-    // 6. Create Immutable Server-Side Package Snapshot
-    const packageSnapshot = createPackagePricingSnapshot(pkg);
+    const isRegisteredForGst = Boolean(
+      deps?.isRegisteredForGst ??
+      (INVOICE_CONFIG_DEFAULTS.supplierGstin && PROVISIONAL_TAX_ASSUMPTIONS.gstInvoiceEnabled),
+    );
+
+    const taxRatePercent = isRegisteredForGst ? pkg.taxRatePercent : 0;
+    const isTaxInclusive = isRegisteredForGst ? pkg.isTaxInclusive : false;
+
+    // 6. Create Immutable Server-Side Package Snapshot reflecting active registration
+    const packageSnapshot = createPackagePricingSnapshot({
+      ...pkg,
+      taxRatePercent,
+      isTaxInclusive,
+    });
 
     // 7. Create PaymentOrder record in database with server-resolved values
     const order = await createPaymentOrder(
@@ -141,8 +158,8 @@ export async function handleCreateOrderRequest(
         creditsAllocated: pkg.creditsAllocated,
         amountMinor: pkg.amountMinor,
         currency: pkg.currency,
-        isTaxInclusive: pkg.isTaxInclusive,
-        taxRatePercent: pkg.taxRatePercent,
+        isTaxInclusive,
+        taxRatePercent,
         gateway,
         packageSnapshot: packageSnapshot as unknown as Record<string, unknown>,
         metadata: {
@@ -160,10 +177,10 @@ export async function handleCreateOrderRequest(
 
     let mockPaymentPayload:
       | {
-          gatewayOrderId: string;
-          gatewayPaymentId: string;
-          gatewaySignature: string;
-        }
+        gatewayOrderId: string;
+        gatewayPaymentId: string;
+        gatewaySignature: string;
+      }
       | undefined;
 
     if (gateway === "mock") {
