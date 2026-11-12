@@ -32,7 +32,8 @@ AI Image & Video Generator roadmap:
 | 8 | AI Video Generator | ✅ Complete — Batch 0 (Feasibility & Architecture) complete; Batch 1 (Domain config, pricing, types, MockVideoProvider, MP4 fixture & Ed25519 webhook boundary; 83 tests) complete; Batch 2A (DB schema, migrations & lifecycle state machine; 70 tests) complete; Batch 2B (Streaming storage ingestion, SSRF IP pinning, thumbnail boundary & signed URLs; 116 tests) complete; Batch 3 (Fal.ai provider adapter, Ed25519 webhook verification, durable persistence, concurrency-safe leases, cron reconciliation & 15m timeout sweep; 161 tests) complete; Batch 4 (Generation APIs & client synchronization layer, including cryptographically bound delayed webhook correlation token verification; 103 tests) complete; Batch 5 (Premium AI Video Generator UI at `/ai-video`, cinematic player, gallery & component tests; 74 tests) complete; Batch 6 (Legal Policy Reconciliation, UI Review, Full Regression & Release Readiness; 20 legal tests, 1,027 total offline regression tests passing) complete. Live Fal.ai E2E trial deferred pending explicit authorization. |
 | 8.1 | Staging Readiness Assessment | ✅ Complete — Comprehensive staging readiness audit across secrets, migrations, Supabase storage, Fal.ai ingress, cron scheduling, operator tooling, diagnostics, offline/live test boundaries, and 7-phase staging setup checklist. |
 | 8.2 | Zero-Cost Operational Preparation | ✅ Complete — Production Operator CLI (`scripts/resolve-ambiguous-job.mts`) with physical storage verification, Account Deletion SOP (`docs/runbooks/account-deletion-sop.md`), Staging Runbook (`docs/runbooks/staging-setup-runbook.md`), 74 CLI safety tests, 1,196 passing offline tests across 15 suites. Commit `c6b73f3` (pushed). |
-| 9 | AI Video Clipper | 🔄 In Progress — Batch 0 approved; Batch 1 (Domain Config, VideoSource Abstraction, Types, Validation, Storage Keys & Mock Engine; 43 tests) complete; Batch 2 (Database Schema Reusability, Job Lifecycle State Machine, Dynamic Multi-Clip Credit Accounting, Ingestion Leases, Terminal Guards, Idempotent Refunds, Decoupled Cleanup & Lease Fencing; 25 tests) complete; Batch 3 (Subprocess Runner & Security Boundary, FFprobe Metadata Extraction, Audio Demuxing & Silence Detection, Scene Cut Detection, Multi-Format Whisper Parser with Interpolation Safeguard, Deterministic Highlight Scoring, High-Contrast ASS/SRT Karaoke Generator; 34 tests) complete; Batch 4 (FFmpeg filter graphs & argument builder, output validation, WebP poster frames, FfmpegClipperEngine, lease-fenced worker orchestration, streaming output ingestion, orphan/source cleanup & retry sweep; 69 tests + 6 lifecycle tests) complete; Batch 5 (direct-to-storage upload workflow with fail-closed, lock-serialised quota; clip job API & job view; worker process with job pickup and graceful/hard shutdown; scene & pacing planner; maintenance cron for stale jobs, cleanup retries and abandoned uploads; browser client controller; 73 tests + 4 lifecycle tests) complete; Batch 6 (`/video-clipper` UI, operator submission switch, queued-job cancel + refund, download redirect, upload-reservation recovery; 35 backend + 40 UI + 7 lifecycle tests) complete; Batch 7 (Orientation-Neutral limits, smartphone rotation tags normalization, upload reservation recovery, real FFmpeg encode suite, throwaway PostgreSQL integration suite; 38 tests + 7 real FFmpeg tests + 15 PostgreSQL integration tests) complete. Batches 1–7 committed and pushed as `599ce9b`. |
+| 9 | AI Video Clipper | ✅ Complete — Commit `a1b9267` (pushed). Batches 1–7 complete, 420 tests passing across 11 suites, 16/16 browser E2E scenarios passed, production build verified. |
+| 10 | Unified Platform & Payments | 🔄 In Progress — Batch 0 approved; Batch 1 (Domain Config, Dynamic Unit Economics Calculator, Payment Gateway Abstraction & Secure Offline Mock; 87 tests) complete. |
 
 ## 3. Tech stack
 
@@ -1339,3 +1340,230 @@ Owner decisions (all approved): (1) `CLIPPER_SUBMISSIONS_ENABLED` operator switc
 - `tsc --noEmit`: 0 errors.
 - `next build --webpack`: 22/22 routes successfully prerendered and optimized.
 - `git diff --check`: clean (0 whitespace errors).
+
+## 17. Stage 10 — Unified Platform & Payments: Architecture, Unit Economics & Implementation Plan
+
+### 17.1 Unit Economics & Pricing Model Correction
+- **Provider Wholesale Cost Structure (PROVISIONAL until verified with live production billing)**:
+  - **AI Image Generation**: Cloudflare FLUX.1 Schnell. Free tier gives 10,000 Neurons/day. Wholesale estimate: ~$0.003–$0.005 per image (~₹0.25–₹0.43). User cost: Fast = 1 credit, Detailed = 2 credits.
+  - **AI Video Generation**: Fal.ai Wan 2.1 720p/5s. Stated Fal rate: $0.10/second = **$0.50 per 5-second video (~₹42.50 at ₹85/USD)**. User cost: 10 credits (`DEFAULT_VIDEO_CREDIT_COST = 10`).
+  - **AI Video Clipper**: Local CPU / containerized worker (FFmpeg reframing + silence/scene analysis). Estimated compute: ~$0.015 per render (~₹1.28). User cost: 5 credits per clip (`DEFAULT_CREDIT_COST_PER_CLIP = 5`).
+  - **Storage & Bandwidth**: Supabase private bucket. Free tier: 1 GB storage, 2 GB egress. Paid scale: $0.021/GB-month storage, $0.09/GB egress. Average video asset size: ~15–25 MB (~₹0.15/video egress).
+  - **Payment Gateway Fees**: Domestic India (UPI/Debit/Credit): 2.0% + 18% GST on the fee = **~2.36% effective**. International cards: ~3.0% + 18% GST = **~3.54%**.
+  - **Statutory Taxation**: Provisional 18% GST assumption for Indian domestic B2C sales.
+
+- **Deficit Demonstration: Why a GST-Inclusive ₹50 Video Retail Price Fails**:
+  - Suppose a 5-second video is priced to the end user at ₹50.00 (GST-inclusive):
+    - Gross charge paid by customer: **₹50.00**
+    - Provisional GST liability (18% backward calculation: $50 - [50 / 1.18]$): **₹7.63**
+    - Net revenue to merchant before fees: **₹42.37**
+    - Domestic Gateway fee (2.36% of ₹50.00): **₹1.18**
+    - Net merchant cash received: **₹41.19**
+    - Provisional Fal.ai Wan 2.1 provider COGS ($0.50 @ ₹85/USD): **₹42.50**
+    - **Gross Margin Deficit**: ₹41.19 - ₹42.50 = **-₹1.31 (immediate negative margin)**
+    - Additional Operational Cost Factors (Configurable Assumptions, Not Verified Costs):
+      - Storage & Egress (~20 MB asset): **~₹0.15**
+      - Reserve for failed/incomplete job refund allowance (configurable assumption: ~3%): **~₹1.27**
+      - Operational & compute safety buffer (configurable assumption: ~5%): **~₹2.12**
+    - **Total Net Loss per Generation**: ₹41.19 - (₹42.50 + ₹0.15 + ₹1.27 + ₹2.12) = **-₹4.85 (-9.7% net margin on gross charge)**.
+  - **Conclusion**: A GST-inclusive ₹50 retail price cannot safely cover a provisional ₹42.50 provider cost plus payment processing fees, statutory taxes, storage, and refund buffers.
+
+- **Financial Calculator Arithmetic & Precision Rules**:
+  - **Integer & Rational Arithmetic**: To prevent floating-point representation drift (e.g. IEEE 754 precision errors), financial computations are performed in integer minor units (paise/cents) or rational ratios (`(baseMinor * rate) / 100`).
+  - **Discrete Rounding Boundaries**: Half-up rounding (`Math.round`) is applied strictly and exclusively at designated minor-unit conversion boundaries (e.g. calculating tax minor units or fee minor units from fractional percentages). Intermediate sums preserve exact integer precision.
+  - **Configurable Risk Parameters**: Refund allowances (default 3%) and compute safety buffers (default 5%) are explicitly categorized as **configurable working assumptions**, not verified accounting liabilities or static constants.
+
+- **Vulnerability Identified in Preliminary Packaging**:
+  - In the preliminary proposal, offering 250 credits for ₹299 meant a user could generate 25 videos (25 * 10 credits = 250 credits).
+  - 25 Fal.ai videos would cost YourAI: 25 * $0.50 = $12.50 = **₹1,062.50**, resulting in a severe loss of -₹763.50 (-255% gross margin) on video-heavy usage.
+  - **Remediation & Invariants**:
+    - Do NOT finalize credit-to-rupee conversion, retail packages, or public pricing in architecture.
+    - Batch 1 will implement a configurable cost/margin calculator (`src/features/billing/calculator.ts`) that takes dynamic parameters (provider rates, FX rates, gateway fees, tax rates, refund allowances, safety buffers) rather than hardcoded assumptions.
+    - Separate internal credit accounting units from customer-facing package retail pricing.
+    - All package definitions and price points remain **PROVISIONAL** until verified with live production billing and legal/tax review.
+
+### 17.2 GST & Taxation Grounding
+- **Provisional Status**: 18% GST rate, SAC Code **`998314`** (Information Technology / Cloud Digital Content Services), supplier GSTIN, Place of Supply rules, and statutory retention requirements are documented as **strictly unverified working assumptions pending formal Indian Chartered Accountant (CA) or tax legal counsel review**.
+- **No Compliance Claims**: Do not claim statutory tax or regulatory compliance in code, UI, or documentation prior to formal CA/legal review.
+- **Display Pricing Invariant**: Avoid inclusive/exclusive ambiguity. B2C checkout in India requires transparent disclosure. Checkouts will show base amount, explicit provisional GST line item, and final payable total.
+- **Configurable Tax Invoicing**: Tax invoice generation will remain fully configurable (supplier legal entity name, corporate address, GSTIN, SAC code, state code, and invoice prefix) via environment/config rather than hardcoded constants, ensuring clean injection of verified corporate data.
+- **Tax Invoice Data Requirements (CGST Act Section 31)**:
+  - Supplier legal name, registered corporate address, and GSTIN (configurable).
+  - Configurable consecutive fiscal invoice numbering format (e.g. `INV-${fiscalYear}-${sequentialNumber.padStart(6, '0')}`).
+  - Date and timestamp of issuance.
+  - Customer name, billing state, and 2-digit Indian State Code (Place of Supply).
+  - Customer GSTIN (optional B2B input tax credit capture).
+  - SAC Code `998314` (provisional).
+  - Itemized taxable value, CGST (9%) + SGST (9%) for intra-state, or IGST (18%) for inter-state supply.
+
+### 17.3 Cross-Generator Capabilities & Scope Boundary
+- **Technical Incompatibilities Identified**:
+  - Wan 2.1 in Stage 8 is integrated strictly as text-to-video (`t2v-720p`), not image-to-video (`i2v`).
+  - Stage 8 video outputs are 5 seconds long (`durationSeconds: 5.0`). Stage 9 Video Clipper strictly enforces `DEFAULT_MIN_SOURCE_DURATION_SECONDS = 15`. A 5-second video is rejected by clipper validation.
+  - **Decision**: All "image-to-video" and "clip-this-video" cross-tool actions are **DEFERRED** until backend model and pipeline support exist.
+- **In-Scope Creative Studio Enhancements**:
+  - Unified studio navigation bar allowing fast switching between `/ai-image`, `/ai-video`, and `/video-clipper`.
+  - Global In-Progress Ribbon: A persistent banner alerting the user when an asynchronous video generation or clipper job is processing in the background (enforcing the cross-stage 1-active-job concurrency limit).
+  - Unified Media History: Centralized gallery displaying all past images, videos, and clips with type filtering, metadata inspection, and short-lived signed URLs.
+
+### 17.4 Payment Lifecycle State Machine & Double-Credit Prevention
+- **Shared Atomic Settlement Service (`settlePaymentOrder`)**:
+  - Both `POST /api/payments/verify` (browser checkout callback) and `POST /api/webhooks/payments/razorpay` (server webhook) delegate to a single shared function.
+  - Settlement executes an atomic transition inside a PostgreSQL transaction:
+    ```sql
+    UPDATE "PaymentOrder"
+    SET "status" = 'PAID',
+        "gatewayPaymentId" = :gatewayPaymentId,
+        "paidAt" = now(),
+        "updatedAt" = now()
+    WHERE "id" = :orderId AND "status" = 'CREATED'
+    RETURNING "id", "userId", "creditsAllocated";
+    ```
+  - If 0 rows are updated, the caller inspects the order:
+    - If already `PAID`: returns `{ alreadySettled: true }` with HTTP 200 (idempotent, zero duplicate credit allocation).
+    - If `FAILED`, `EXPIRED`, or `CREATION_UNKNOWN`: delegates to late-settlement handler or flags `NEEDS_REVIEW`.
+  - If 1 row is updated: executes `creditWalletPurchase` within the **same** ACID transaction.
+- **Concurrency, Replays & Ambiguous Gateway Creation**:
+  - **Ambiguous Gateway Order Creation & Recovery Capabilities**:
+    - When creating a gateway order, if a network timeout, socket disconnect, or server crash occurs before the gateway response is received, the system **never blindly retries creation** and **never assumes the gateway order was not created**.
+    - Internal `PaymentOrder` is persisted locally in status `PENDING` with a unique, cryptographically random `receipt` identifier.
+    - `receipt` is treated as a unique internal merchant reference, not an assumed universal gateway idempotency guarantee.
+    - **Adapter Capability Check (`supportsReceiptLookup`)**:
+      - Gateway adapters explicitly declare whether they support receipt-based secondary lookup (e.g. Razorpay supports querying orders by `receipt`, whereas other gateways may not).
+      - If supported, the system attempts an idempotent lookup by `receipt`. If found, the gateway order ID is bound and status updated to `CREATED`.
+      - If receipt lookup is **unsupported** by the gateway, or if the lookup query is inconclusive/fails:
+        - The internal order transitions immediately to **`CREATION_UNKNOWN`**.
+        - Duplicate checkout creation is strictly **blocked** for that attempt.
+        - Blind retries are strictly prohibited.
+        - Resolution requires automated reconciliation against verified gateway transaction logs, reconciliation crons, or manual operator review before resolving to `CREATED` or `FAILED`.
+  - **Browser vs Webhook Race**:
+    - Browser verification and webhook racing concurrently: exactly one updates the row and credits the wallet; the loser finds `status = 'PAID'` and returns safely.
+  - **Duplicate Webhook Delivery**:
+    - Deduplicated by database constraint on `PaymentWebhookEvent(gateway, eventId)`.
+  - **Gateway Capture Succeeds while Local DB Fails**:
+    - Gateway retries webhooks with exponential backoff (24h window). If retries exhaust, operator reconciliation resolves the captured payment against gateway APIs.
+  - **Late Payments on Expired / Cancelled Orders**:
+    - If an order was marked `EXPIRED`, `FAILED`, or `CREATION_UNKNOWN`, but funds were debited by the gateway, incoming settlement transitions to `NEEDS_REVIEW` and notifies operators to either credit the account or initiate an audited refund.
+
+### 17.5 Database Architecture for Commercial Billing
+```prisma
+enum PaymentOrderStatus {
+  PENDING           // Internal record created, awaiting gateway order ID
+  CREATION_UNKNOWN  // Gateway order creation timed out/failed ambiguously; duplicate checkout blocked pending reconciliation
+  CREATED           // Gateway order created and verified, checkout presented to user
+  PAID              // Verified and settled, credits issued atomically
+  FAILED            // Payment failed or rejected by gateway
+  EXPIRED           // Timed out without payment
+  REFUNDED          // Reversal/refund processed via gateway
+  NEEDS_REVIEW      // Ambiguous state requiring operator intervention
+}
+
+model PaymentOrder {
+  id                   String             @id @default(cuid())
+  userId               String
+  gateway              String             // "mock" | "razorpay"
+  packageId            String             // e.g. "TOPUP_STARTER"
+  creditsAllocated     Int                // Immutable snapshot of credits at purchase
+  currency             String             // "INR" | "USD"
+  baseAmountMinor      Int                // Base amount before tax in lowest currency minor unit (paise/cents)
+  taxAmountMinor       Int                // Tax amount in lowest currency minor unit
+  totalAmountMinor     Int                // Total charged in lowest currency minor unit
+  taxRatePercent       Int                // Tax rate snapshot (e.g. 18)
+  sacCode              String             // SAC code snapshot (e.g. "998314")
+  status               PaymentOrderStatus @default(PENDING)
+  receipt              String             @unique // Internal unique merchant reference
+  gatewayOrderId       String?            // Gateway order reference (e.g. order_xxx)
+  gatewayPaymentId     String?            // Gateway payment reference (e.g. pay_xxx)
+  gatewaySignature     String?            // Cryptographic signature
+  paymentMethod        String?            // "upi" | "card" | "netbanking"
+  errorMessage         String?            @db.Text
+  paidAt               DateTime?
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+
+  // Financial records MUST survive user account deletion for statutory accounting audit compliance.
+  // Cascade delete is prohibited. Account deletion SOP uses the User Tombstone pattern to satisfy onDelete: Restrict.
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([userId, createdAt])
+  @@index([status, createdAt])
+  @@index([gateway, gatewayOrderId])
+  @@unique([gateway, gatewayOrderId])
+  @@unique([gateway, gatewayPaymentId])
+}
+
+model PaymentWebhookEvent {
+  id              String             @id @default(cuid())
+  gateway         String             // "razorpay" | "mock"
+  eventId         String             // Gateway webhook delivery ID
+  eventType       String             // "payment.captured", "payment.failed"
+  payload         Json
+  status          WebhookEventStatus @default(PENDING)
+  processingToken String?            // Worker lease token
+  leaseExpiresAt  DateTime?          // Crash recovery lease expiry
+  attempts        Int                @default(0)
+  lastError       String?            @db.Text
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  @@unique([gateway, eventId])
+  @@index([gateway, status, leaseExpiresAt])
+}
+```
+
+- **Currency Validation & Minor Unit Precision**:
+  - `currency`: Supported ISO 4217 uppercase strings: `"INR"` and `"USD"`.
+  - Minor unit factor: 100 for both INR (1 INR = 100 paise) and USD (1 USD = 100 cents). Stored strictly as positive integers. Fractional minor units are prohibited.
+  - Rounding rule: Half-up rounding (`Math.round`) applied strictly at the final minor unit boundary.
+  - Gateway-scoped uniqueness: Unique constraints are scoped to `[gateway, gatewayOrderId]` and `[gateway, gatewayPaymentId]` to prevent collisions across gateways or between mock and live providers.
+
+### 17.6 Credit Accounting Invariants
+- **Atomic Dual-Write**: Every addition of credits to `CreditWallet.balance` must occur within the same ACID transaction as the creation of a `CreditTransaction` row with `type: CreditTransactionType.PURCHASE`.
+- **Immutable Idempotency Key**: For purchases, `idempotencyKey = "payment-order:${orderId}"`. Duplicate attempts abort at the database constraint level.
+- **Audit Ledger Reconciliation**: An operator script verifies `CreditWallet.balance === SUM(CreditTransaction.amount) WHERE userId = :id`. Mismatches trigger alarms without silently mutating wallet rows.
+
+### 17.7 Mock Gateway Security Invariants
+- **Strict Runtime Boundary**: `MockPaymentGatewayEngine` is explicitly disallowed in production (`NODE_ENV === "production"`). Any attempt to pass `gateway = "mock"` in production fails closed with HTTP 403 `GATEWAY_DISALLOWED`.
+- **Zero Mock Secret Exposure**: Mock HMAC secrets and signing keys reside exclusively on the server and are never bundled to client-side code.
+- **₹0 Spend Compliance**: Mock engine runs completely in-memory using `node:crypto`. Zero third-party network egress or cloud infrastructure costs.
+
+### 17.8 Legal & Regulatory Disclosures: Statutory Retention & User Tombstone Pattern
+- **14-Day Refund Proposal (Provisional)**: Labeled explicitly as a provisional policy proposal subject to Indian Consumer Protection (E-Commerce) Rules, 2020. Unused credits may be eligible for refund; once compute credits are consumed for completed generation jobs, that portion of compute is non-refundable.
+- **Statutory Financial Retention Disclosures (Context-Specific, Not Universal)**:
+  - Retention requirements differ by statutory framework and corporate structure; no blanket 8-year rule applies universally to all SaaS operations or all data categories:
+    - **Companies Act, 2013 (Section 128(5))**: Applicable to incorporated Indian companies, mandating retention of books of account and vouchers for not less than eight financial years immediately preceding a financial year.
+    - **CGST Act, 2017 (Section 36)**: Applicable to registered taxable persons under GST, mandating retention of accounts, tax invoices, and registers for 72 months (6 years) from the due date of furnishing the annual return for the relevant fiscal year.
+    - **Digital Personal Data Protection (DPDP) Act, 2023**: DPDP does NOT impose an 8-year retention rule. Section 8(7) mandates erasure of personal data once the purpose is served, while Section 17(1)(b) explicitly exempts data processing necessary for compliance with any law in force.
+  - **Category-Specific Retention Architecture**:
+    - *Category A (Operational & Telemetry Data)*: Prompts, transient logs, unbilled usage data, and session tokens -> Subject to prompt erasure upon user account deletion.
+    - *Category B (Statutory Financial Audit Records)*: `PaymentOrder`, invoices, and `CreditTransaction` ledger entries -> Retained strictly for the duration mandated by applicable corporate/tax law and certified legal/CA guidance.
+- **The User Tombstone Pattern & Foreign-Key Integrity**:
+  - Because `PaymentOrder` defines `onDelete: Restrict`, executing a raw SQL `DELETE FROM "User"` on an account with financial history is physically blocked by PostgreSQL foreign-key constraints. Physical user-row deletion is therefore **not supported** for transacting accounts.
+  - Account deletion requests are fulfilled via the **User Tombstone** pattern:
+    - Non-financial Personally Identifiable Information (name, email, OAuth credentials, password hash, IP logs, session tokens) is permanently scrubbed or replaced with randomized hashes (e.g. `tombstone-user-${id}@anonymized.local`).
+    - The `User` row is marked as a tombstone (`isDeleted = true`, `deletedAt = now()`).
+    - The primary key stub is retained solely to maintain referential integrity with immutable financial audit records (`PaymentOrder`, `CreditTransaction`).
+- **Subscriptions Deferred**: Automated recurring card debits (RBI e-mandate) are out of scope for Stage 10. Only one-off prepaid credit packages will be implemented.
+
+### 17.9 Revised Batch-by-Batch Implementation Plan
+- **Batch 0**: Architecture, Unit Economics, Ambiguity Recovery & Security Assessment (Approved & Documented).
+- **Batch 1**: Commercial Domain Config, Dynamic Unit Economics Model, Gateway Engine Abstraction & Secure Offline Mock.
+  - **Status**: ✅ Complete & Verified.
+  - **Deliverables**:
+    - `src/features/billing/config.ts`: Supported currencies (`INR`, `USD`), minor-unit conversions (`toMinorUnits`, `fromMinorUnits`, `formatCurrency`) with exact half-up rounding and split-integer `BigInt` rational scaling up to `Number.MAX_SAFE_INTEGER / multiplier`. Provisional tax assumptions (18% GST / SAC 998314) and wholesale costs ($0.50/5s video, $0.004/image, $0.015/clip, $0.09/GB egress), configurable tax invoice defaults (`INV-${fiscalYear}-${seq}`).
+    - `src/features/billing/types.ts`: Domain models, order status enum (including `CREATION_UNKNOWN`), `GatewayCapabilities` interface, custom domain errors with prototype preservation (`MockGatewayDisallowedError`, `OrderCreationAmbiguityError`, `GatewayCapabilityNotSupportedError`, etc.).
+    - `src/features/billing/calculator.ts`: Fully `BigInt`-rational unit economics and margin calculator (`roundDivBigInt`, `ceilDivBigInt`, `computeProviderCostMinor`). All intermediate operations execute with arbitrary precision and half-up rounding, with explicit `INTEGER_OVERFLOW` guards against exceeding `Number.MAX_SAFE_INTEGER` (9,007,199,254,740,991). Computes both Gross Revenue Margin (`(netMargin / grossCharge) * 100`) and Net Revenue Margin (`(netMargin / netRevenue) * 100`). Includes reference deficit demonstration (`calculateVideoDeficitAt50Rupees()`, proving -₹4.85 / -9.70% gross deficit and -11.45% net deficit) and dynamic break-even gross charge calculator (`calculateBreakEvenChargeMinor`) with configurable `marginBasis` ("gross" | "net").
+    - `src/features/billing/mock-gateway.ts`: Secure offline mock engine. Enforces strict production fail-closed isolation (`NODE_ENV === "production"` throws `MockGatewayDisallowedError`), conservative capability defaults (`supportsReceiptLookup: false`), ambiguous creation timeout simulation with idempotent recovery, in-memory isolation, and HMAC-SHA256 signature verification for checkouts and webhooks.
+    - `scripts/test-billing-batch1.mts`: 144/144 unit tests passing across all domain rules, half-up rounding boundaries for INR and USD, rational arithmetic overflow guards at `Number.MAX_SAFE_INTEGER`, break-even targets, security isolation, and simulation hooks.
+  - **Decisions & Limitations Recorded**:
+    - Secondary receipt-based lookup is kept disabled by default in gateway capabilities (`supportsReceiptLookup: false`) until verified against live gateway API contracts. If ambiguous creation occurs and receipt lookup is unsupported, orders transition to `CREATION_UNKNOWN` and block duplicate checkout.
+    - Gateway fee GST treatment is documented as a configurable accounting assumption: defaults to an unrecoverable business expense (e.g. 2.0% MDR + 18% GST = 2.36% effective deduction); can be configured to 0.0 for registered entities claiming Input Tax Credit (ITC) under Section 16 of the CGST Act, pending qualified CA review.
+    - Zero retail packages or public prices are hardcoded; all costs and margins are dynamically evaluated through pure calculation models.
+    - Zero live payment integrations, credentials, or network calls (strict ₹0 spend compliance).
+    - Database schemas and Prisma migrations deferred to Batch 2.
+    - `scripts/e2e/browser-e2e.mjs` modifications recovered from IDE buffer represent Stage 9 browser test resilience work and are preserved intact, kept separate from Stage 10 Batch 1 commits.
+- **Batch 2**: Database Schema, Payment Order Lifecycle, Ledger Purchase Primitives & Concurrency Guards.
+- **Batch 3**: Shared Settlement Service, Verification APIs & Durable Webhook Ingestion.
+- **Batch 4**: Unified Dashboard Navigation, Global Active Job Ribbon & Cross-Tool Media History.
+- **Batch 5**: Credit Store Modal, Detailed Transaction Ledger View & Tax Invoice Receipt UI.
+- **Batch 6**: Legal Policy Updates, Operator Payment Reconciliation Tooling & Full Regression.
