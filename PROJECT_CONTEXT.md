@@ -1563,6 +1563,29 @@ model PaymentWebhookEvent {
     - Database schemas and Prisma migrations deferred to Batch 2.
     - `scripts/e2e/browser-e2e.mjs` modifications recovered from IDE buffer represent Stage 9 browser test resilience work and are preserved intact, kept separate from Stage 10 Batch 1 commits.
 - **Batch 2**: Database Schema, Payment Order Lifecycle, Ledger Purchase Primitives & Concurrency Guards.
+  - **Status**: ✅ Complete & Verified.
+  - **Deliverables**:
+    - `prisma/schema.prisma`: Additive data models for payment lifecycle and financial auditability:
+      - `PaymentOrder`: Primary commercial order entity (`receipt @unique`, `packageId`, `packageSnapshot Json`, `creditsAllocated`, `currency`, `baseAmountMinor`, `taxAmountMinor`, `totalAmountMinor`, `status PaymentOrderStatus`, `gateway`, `gatewayOrderId`, `gatewayPaymentId`, `gatewaySignature`, `reviewReason`, `metadata Json?`). Relates to `User` via `onDelete: Restrict` to enforce statutory accounting retention.
+      - `PaymentAttempt`: Additive gateway attempt entity (`orderId`, `gateway`, `gatewayOrderId`, `gatewayPaymentId`, `status PaymentAttemptStatus`, `amountMinor`, `currency`, `errorCode`, `errorMessage`). Tracks multiple checkout attempts per order safely.
+      - `PaymentWebhookEvent`: Durable webhook store (`gateway`, `eventId`, `eventType`, `payload Json`, `status WebhookEventStatus`, `processingToken`, `leaseExpiresAt`, `attempts`, `lastError`). Scoped uniqueness `@@unique([gateway, eventId])`.
+      - `CreditTransaction`: Added `paymentOrderId String? @unique` with `onDelete: Restrict`. Enforces at database level that at most one purchase ledger entry can ever be minted per PaymentOrder.
+      - `User`: Added tombstone fields `isDeleted Boolean @default(false)` and `deletedAt DateTime?` for compliant GDPR/DPDP soft deletion while preserving foreign-key integrity with financial records.
+    - `prisma/migrations/20261112190000_add_payment_and_billing_models/migration.sql`: Generated additive migration SQL containing enum definitions, table creation, foreign keys (`onDelete: RESTRICT`), and unique indexes. Kept unapplied to remote databases (strict compliance with zero production/staging mutations).
+    - `src/features/credits/ledger.ts`: Implemented `creditWalletForPurchase` primitive. Guarantees atomic dual-write (wallet balance increment + `PURCHASE` ledger entry) in a single ACID transaction. Strictly preserves `CreditWallet.balance = SUM(CreditTransaction.amount)`.
+    - `src/features/billing/orders.ts`: Implemented `createPaymentOrder`, `recordGatewayOrderAttempt`, `getPaymentOrder`, and `generateMerchantReceipt` with rational integer tax liability calculation.
+    - `src/features/billing/settlement.ts`: Implemented shared settlement lifecycle service (`settlePaymentOrder`, `recordPaymentFailure`, `expirePaymentOrder`). Guarantees:
+      - Atomic guarded transitions: `status IN ('PENDING', 'CREATED', 'CREATION_UNKNOWN') -> PAID`.
+      - Strict parameter validation: gateway, currency, total amount, and gateway order ID mismatches escalate to `NEEDS_REVIEW` without crediting.
+      - Idempotent deduplication: duplicate settlement deliveries return `alreadySettled: true` without double-crediting.
+      - Late capture protection: successful captures for `FAILED` or `EXPIRED` orders escalate to `NEEDS_REVIEW` (`LATE_CAPTURE_AFTER_FAILURE`, `LATE_CAPTURE_AFTER_EXPIRY`) and never credit automatically.
+      - Conflicting capture protection: distinct capture IDs for already-settled orders trigger `MULTIPLE_CAPTURES_DETECTED`.
+    - `src/features/billing/webhook-store.ts`: Implemented durable webhook primitives (`recordPaymentWebhookEvent`, `claimPaymentWebhookBatch`, `completePaymentWebhookEvent`, `failPaymentWebhookEvent`). Enforces idempotent insertion, atomic lease claiming with lease expiry recovery, and bounded retries escalating to terminal `FAILED`.
+    - `scripts/test-billing-batch2.mts`: 77/77 tests passing across order creation, integer tax splits, atomic settlement, audit invariants, concurrency races (1 winner out of 5 simultaneous callers), security mismatches, late capture escalation, webhook leases, crash recovery, and transaction rollback.
+  - **Decisions & Limitations Recorded**:
+    - No migrations were applied to Supabase, staging, or production (strictly compliant with ₹0 spend and isolation rules).
+    - Database integration tests were executed against an in-memory transactional mock implementing PostgreSQL row locking, ACID rollbacks, and unique constraint semantics. No local PostgreSQL daemon was active on localhost:5432.
+    - Public payment routes and live webhook endpoints remain deferred to Batch 3.
 - **Batch 3**: Shared Settlement Service, Verification APIs & Durable Webhook Ingestion.
 - **Batch 4**: Unified Dashboard Navigation, Global Active Job Ribbon & Cross-Tool Media History.
 - **Batch 5**: Credit Store Modal, Detailed Transaction Ledger View & Tax Invoice Receipt UI.

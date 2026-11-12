@@ -43,16 +43,21 @@ model User {
   image         String?
   /// bcrypt hash for email/password sign-in. Null for OAuth-only users.
   passwordHash  String?
+  /// User tombstone flag: accounts with statutory financial history (PaymentOrder)
+  /// are soft-deleted/anonymized to satisfy onDelete: Restrict constraints.
+  isDeleted     Boolean   @default(false)
+  deletedAt     DateTime?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
-  accounts     Account[]
-  sessions     Session[]
-  wallet       CreditWallet?
-  transactions CreditTransaction[]
-  jobs         GenerationJob[]
-  assets       GeneratedAsset[]
-  usageLogs    UsageLog[]
+  accounts      Account[]
+  sessions      Session[]
+  wallet        CreditWallet?
+  transactions  CreditTransaction[]
+  jobs          GenerationJob[]
+  assets        GeneratedAsset[]
+  usageLogs     UsageLog[]
+  paymentOrders PaymentOrder[]
 }
 
 model Account {
@@ -116,15 +121,19 @@ model CreditTransaction {
   idempotencyKey String                @unique
   /// Generation job this debit/refund belongs to (null for grants, purchases, adjustments).
   jobId          String?
+  /// Payment order this purchase credit belongs to (unique: 1 payment order = at most 1 purchase credit).
+  paymentOrderId String?               @unique
   createdAt      DateTime              @default(now())
 
-  user   User           @relation(fields: [userId], references: [id], onDelete: Cascade)
-  wallet CreditWallet   @relation(fields: [walletId], references: [id], onDelete: Cascade)
-  job    GenerationJob? @relation(fields: [jobId], references: [id], onDelete: SetNull)
+  user         User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  wallet       CreditWallet   @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  job          GenerationJob? @relation(fields: [jobId], references: [id], onDelete: SetNull)
+  paymentOrder PaymentOrder?  @relation(fields: [paymentOrderId], references: [id], onDelete: Restrict)
 
   @@index([userId, createdAt])
   @@index([walletId, createdAt])
   @@index([jobId])
+  @@index([paymentOrderId])
 }
 
 model GenerationJob {
@@ -294,4 +303,103 @@ model ProviderWebhookEvent {
 
   @@index([provider, status, leaseExpiresAt])
   @@index([jobId])
+}
+
+// ---------------------------------------------------------------------------
+// Payment Gateway, Order Settlement & Webhook Events (Stage 10 Batch 2)
+// ---------------------------------------------------------------------------
+
+enum PaymentOrderStatus {
+  PENDING
+  CREATION_UNKNOWN
+  CREATED
+  PAID
+  FAILED
+  EXPIRED
+  REFUNDED
+  NEEDS_REVIEW
+}
+
+enum PaymentAttemptStatus {
+  INITIATED
+  AUTHORIZED
+  CAPTURED
+  FAILED
+}
+
+model PaymentOrder {
+  id               String             @id @default(cuid())
+  userId           String
+  receipt          String             @unique // Unique merchant receipt reference (e.g. rcpt_...)
+  packageId        String             // e.g. "PKG_CREATOR"
+  packageSnapshot  Json               // Immutable purchase-time package definition
+  creditsAllocated Int                // Number of credits to allocate upon settlement
+  currency         String             // "INR" | "USD"
+  baseAmountMinor  Int                // Net amount excluding tax in minor units
+  taxAmountMinor   Int                // Tax liability in minor units
+  totalAmountMinor Int                // Gross charge in minor units
+  status           PaymentOrderStatus @default(PENDING)
+  gateway          String             // "razorpay" | "mock"
+  gatewayOrderId   String?            // External gateway order ID
+  gatewayPaymentId String?            // External gateway payment ID
+  gatewaySignature String?            // Cryptographic payment signature
+  reviewReason     String?            // Code explaining why order was transitioned to NEEDS_REVIEW
+  metadata         Json?              // Client IP, user agent, risk flags, audit notes
+  paidAt           DateTime?
+  failedAt         DateTime?
+  expiredAt        DateTime?
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+
+  // Statutory financial audit retention: CASCADE is strictly prohibited.
+  // Physical user row deletion is prevented by onDelete: Restrict.
+  user              User               @relation(fields: [userId], references: [id], onDelete: Restrict)
+  creditTransaction CreditTransaction?
+  attempts          PaymentAttempt[]
+
+  @@unique([gateway, gatewayOrderId])
+  @@unique([gateway, gatewayPaymentId])
+  @@index([userId, createdAt])
+  @@index([status, createdAt])
+  @@index([gateway, gatewayOrderId])
+}
+
+model PaymentAttempt {
+  id               String               @id @default(cuid())
+  orderId          String
+  gateway          String               // "razorpay" | "mock"
+  gatewayOrderId   String?
+  gatewayPaymentId String?
+  status           PaymentAttemptStatus @default(INITIATED)
+  amountMinor      Int
+  currency         String
+  errorCode        String?
+  errorMessage     String?              @db.Text
+  metadata         Json?
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+
+  order PaymentOrder @relation(fields: [orderId], references: [id], onDelete: Restrict)
+
+  @@index([orderId, createdAt])
+  @@index([gateway, gatewayOrderId])
+  @@index([gateway, gatewayPaymentId])
+}
+
+model PaymentWebhookEvent {
+  id              String             @id @default(cuid())
+  gateway         String             // "razorpay" | "mock"
+  eventId         String             // Gateway webhook delivery ID
+  eventType       String             // "payment.captured", "payment.failed", etc.
+  payload         Json
+  status          WebhookEventStatus @default(PENDING)
+  processingToken String?            // Worker lease token
+  leaseExpiresAt  DateTime?          // Crash recovery lease expiry
+  attempts        Int                @default(0)
+  lastError       String?            @db.Text
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  @@unique([gateway, eventId])
+  @@index([gateway, status, leaseExpiresAt])
 }

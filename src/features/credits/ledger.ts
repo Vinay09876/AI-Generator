@@ -1,4 +1,5 @@
-import { CreditTransactionType, type Prisma } from "@/generated/prisma/client";
+import { CreditTransactionType } from "@/generated/prisma/enums";
+import type { Prisma } from "@/generated/prisma/client";
 import { AccountingError } from "@/features/generations/errors";
 
 /**
@@ -9,6 +10,7 @@ type Tx = Prisma.TransactionClient;
 
 export const jobDebitKey = (jobId: string) => `job-debit:${jobId}`;
 export const jobRefundKey = (jobId: string) => `job-refund:${jobId}`;
+export const paymentOrderCreditKey = (orderId: string) => `payment-order:${orderId}`;
 
 /**
  * Atomic guarded debit: a single conditional UPDATE only matches when the balance covers
@@ -88,4 +90,75 @@ export async function refundJobDebit(tx: Tx, params: { jobId: string; descriptio
     },
   });
   return { refunded: true as const, amount, balanceAfter: rows[0].balance };
+}
+
+/**
+ * Atomic purchase-credit allocation primitive (Stage 10 Batch 2).
+ * Operates strictly inside a caller-supplied database transaction.
+ * Guarantees that wallet balance increment and PURCHASE ledger entry happen together.
+ * The unique paymentOrderId on CreditTransaction enforces at database constraint level
+ * that a payment order can only be credited once.
+ */
+export async function creditWalletForPurchase(
+  tx: Tx,
+  params: {
+    userId: string;
+    paymentOrderId: string;
+    creditsAllocated: number;
+    description?: string;
+  },
+) {
+  const { userId, paymentOrderId, creditsAllocated, description } = params;
+  if (!Number.isInteger(creditsAllocated) || creditsAllocated <= 0) {
+    throw new Error("Purchase credit amount must be a positive integer.");
+  }
+
+  // Guard against duplicate credit transaction for this payment order
+  const existingTx = await tx.creditTransaction.findUnique({
+    where: { paymentOrderId },
+    select: { id: true, balanceAfter: true, walletId: true },
+  });
+  if (existingTx) {
+    return { walletId: existingTx.walletId, balanceAfter: existingTx.balanceAfter, alreadyCredited: true };
+  }
+
+  // Atomic guarded wallet update
+  const rows = await tx.$queryRaw<{ id: string; balance: number }[]>`
+    UPDATE "CreditWallet"
+    SET "balance" = "balance" + ${creditsAllocated}, "updatedAt" = now()
+    WHERE "userId" = ${userId}
+    RETURNING "id", "balance"`;
+
+  let walletId: string;
+  let balanceAfter: number;
+
+  if (rows.length === 0) {
+    const newWallet = await tx.creditWallet.create({
+      data: {
+        userId,
+        balance: creditsAllocated,
+      },
+      select: { id: true, balance: true },
+    });
+    walletId = newWallet.id;
+    balanceAfter = newWallet.balance;
+  } else {
+    walletId = rows[0].id;
+    balanceAfter = rows[0].balance;
+  }
+
+  await tx.creditTransaction.create({
+    data: {
+      userId,
+      walletId,
+      paymentOrderId,
+      type: CreditTransactionType.PURCHASE,
+      amount: creditsAllocated,
+      balanceAfter,
+      description: description ?? "Credit package purchase",
+      idempotencyKey: paymentOrderCreditKey(paymentOrderId),
+    },
+  });
+
+  return { walletId, balanceAfter, alreadyCredited: false };
 }
