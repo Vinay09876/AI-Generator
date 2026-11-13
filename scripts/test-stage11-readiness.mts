@@ -231,6 +231,7 @@ class MockStage11Database {
           for (const [id, a] of db.assets.entries()) {
             if (where.userId && a.userId !== where.userId) continue;
             if (where.jobId && a.jobId !== where.jobId) continue;
+            if (where.isHidden !== undefined && Boolean(a.isHidden) !== where.isHidden) continue;
             db.assets.set(id, { ...a, ...data });
             count++;
           }
@@ -374,6 +375,10 @@ async function main() {
     mockDb.sessions.set("sess_1", { id: "sess_1", userId: "usr_active" });
     mockDb.accounts.set("acc_1", { id: "acc_1", userId: "usr_active", provider: "google" });
     mockDb.assets.set("ast_1", { id: "ast_1", userId: "usr_active", storageKey: "users/usr_active/img1.webp" });
+    mockDb.assets.set("ast_2", {
+      id: "ast_2", userId: "usr_active", storageKey: "users/usr_active/img2.webp",
+      isHidden: true, hiddenBy: "usr_moderator", hiddenReason: "policy violation", hiddenAt: new Date(0),
+    });
     mockDb.orders.set("ord_1", { id: "ord_1", userId: "usr_active", totalAmountMinor: 50000, status: PaymentOrderStatus.PAID });
 
     // 1. Rejection on incorrect password
@@ -435,10 +440,19 @@ async function main() {
     assert(mockDb.sessions.size === 0, "All sessions were revoked");
     assert(mockDb.accounts.size === 0, "All OAuth connections were revoked");
 
-    // Verify Asset Pointers Marked as Pending Purge
+    // Verify assets are withdrawn but their real Storage keys are preserved for the operator purge
     const asset = mockDb.assets.get("ast_1");
-    assert(asset.storageKey === "pending_purge/usr_active", "Asset storage key marked as pending purge");
+    assert(asset.storageKey === "users/usr_active/img1.webp", "Asset storage key preserved so the object can be purged");
+    assert(asset.isHidden === true && asset.hiddenBy === "account-deletion", "Asset hidden from every access path");
+    assert(asset.hiddenAt instanceof Date, "Asset hiddenAt recorded");
     assert(asset.fileUrl === null, "Asset fileUrl wiped");
+    const modHidden = mockDb.assets.get("ast_2");
+    assert(modHidden.storageKey === "users/usr_active/img2.webp", "Moderator-hidden asset key preserved");
+    assert(
+      modHidden.hiddenBy === "usr_moderator" && modHidden.hiddenReason === "policy violation" && modHidden.hiddenAt.getTime() === 0,
+      "Moderator-hidden asset keeps its moderation attribution",
+    );
+    assert(modHidden.fileUrl === null, "Moderator-hidden asset fileUrl wiped");
 
     // Verify Statutory Financial Order Preserved (onDelete: Restrict)
     const orders = mockDb.orders.get("ord_1");

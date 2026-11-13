@@ -450,7 +450,9 @@ await runSection("Order Creation API Handler Rules", async () => {
       ...deps,
       trustedOrigins: () => ["https://yourai.example"],
     });
-    assert(prodRes.status === 403, "Production environment rejects mock payment gateway with HTTP 403");
+    // Post-S8: purchases are disabled outright in production, so the request is refused (503
+    // PURCHASES_DISABLED) before the mock-gateway check is even reached.
+    assert(prodRes.status === 503, "Production environment refuses order creation (purchases disabled) with HTTP 503");
   } finally {
     envObj.NODE_ENV = origEnv;
   }

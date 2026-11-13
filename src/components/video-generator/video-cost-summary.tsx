@@ -64,7 +64,7 @@ export function VideoCostSummary({
               href={APP_ROUTES.settings}
               className="inline-block pt-1 font-semibold text-amber-300 underline underline-offset-2 transition-colors hover:text-amber-100"
             >
-              Add credits in Settings &rarr;
+              View your credits in Settings &rarr;
             </Link>
           </div>
         </div>

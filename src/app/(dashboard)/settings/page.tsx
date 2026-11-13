@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { redirect } from "next/navigation";
 import { Coins, FileText, KeyRound, ShieldCheck, UserRound } from "lucide-react";
 import { auth } from "@/lib/auth";
+import { redirectSignedOut } from "@/lib/session-guard";
 import { ROUTES } from "@/lib/constants";
 import { formatDate, formatNumber } from "@/lib/format";
 import { getCreditTransactionsPage, getCreditUsage, getWalletSummary } from "@/features/credits/queries";
@@ -13,13 +13,14 @@ import { DeleteAccountModal } from "@/components/dashboard/delete-account-modal"
 import { PageHeader } from "@/components/dashboard/page-header";
 import { RevealGroup, RevealItem } from "@/components/dashboard/reveal";
 import { TransactionLedger } from "@/components/billing/transaction-ledger";
+import { getPurchaseAvailability } from "@/features/billing/availability";
 
 export const metadata: Metadata = { title: "Settings" };
 
 export default async function SettingsPage() {
   const session = await auth();
   const userId = session?.user?.id;
-  if (!userId) redirect(ROUTES.login);
+  if (!userId) return redirectSignedOut();
 
   const [profile, methods, wallet, usage, ledger] = await Promise.all([
     getProfile(userId),
@@ -73,7 +74,11 @@ export default async function SettingsPage() {
       </RevealItem>
 
       <RevealItem>
-        <TransactionLedger initialItems={ledger.items} walletBalance={wallet.balance} />
+        <TransactionLedger
+          initialItems={ledger.items}
+          walletBalance={wallet.balance}
+          purchasesEnabled={getPurchaseAvailability().enabled}
+        />
       </RevealItem>
 
       <RevealItem>

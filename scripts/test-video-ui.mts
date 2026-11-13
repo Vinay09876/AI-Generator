@@ -433,7 +433,7 @@ console.log("\n# Section 7: Component Render & Accessibility Markup Validation")
   );
   ok(lowBalanceMarkup.includes('role="alert"'), "insufficient credits renders role=alert");
   ok(lowBalanceMarkup.includes("Insufficient Credits"), "displays Insufficient Credits title");
-  ok(lowBalanceMarkup.includes("Add credits in Settings"), "provides link to add credits");
+  ok(lowBalanceMarkup.includes("View your credits in Settings"), "links to the credit balance in Settings");
 
   // Daily limit reached alert
   const dailyLimitMarkup = renderToStaticMarkup(

@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
-import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
-import { ROUTES } from "@/lib/constants";
+import { redirectSignedOut } from "@/lib/session-guard";
 import { firstName, formatDate } from "@/lib/format";
 import { getCreditUsage, getWalletSummary } from "@/features/credits/queries";
 import { getDailyActivity, getRecentJobs, getUsageStats } from "@/features/generations/queries";
@@ -18,7 +17,7 @@ export const metadata: Metadata = { title: "Overview" };
 export default async function DashboardPage() {
   const session = await auth();
   const userId = session?.user?.id;
-  if (!userId) redirect(ROUTES.login);
+  if (!userId) return redirectSignedOut();
 
   // Independent, user-scoped queries run in parallel.
   const [profile, wallet, usage, stats, activity, recentJobs] = await Promise.all([

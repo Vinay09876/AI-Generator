@@ -10,6 +10,7 @@
 
 import {
   claimPaymentWebhookBatch,
+  claimPaymentWebhookEventById,
   completePaymentWebhookEvent,
   failPaymentWebhookEvent,
 } from "../webhook-store";
@@ -177,25 +178,58 @@ export async function processPendingPaymentWebhookBatch(options: {
   let failedCount = 0;
 
   for (const evt of events) {
-    const res = await processPaymentWebhookEvent(evt, options.dbClient);
+    const res = await processAndSettleClaimedEvent(evt, workerToken, options.maxAttempts, options.dbClient);
     results.push(res);
-
-    if (res.status === WebhookEventStatus.PROCESSED) {
-      await completePaymentWebhookEvent(evt.id, workerToken, options.dbClient);
-      processedCount++;
-    } else {
-      await failPaymentWebhookEvent(
-        {
-          id: evt.id,
-          workerToken,
-          errorMessage: res.error ?? "Webhook processing failed",
-          maxAttempts: options.maxAttempts ?? 5,
-        },
-        options.dbClient,
-      );
-      failedCount++;
-    }
+    if (res.status === WebhookEventStatus.PROCESSED) processedCount++;
+    else failedCount++;
   }
 
   return { processedCount, failedCount, results };
+}
+
+/**
+ * Processes one claimed event and records the outcome on its row: PROCESSED on success, otherwise
+ * back to PENDING for a later retry (or FAILED once maxAttempts is reached).
+ */
+async function processAndSettleClaimedEvent(
+  evt: { id: string; gateway: string; eventId: string; eventType: string; payload: any },
+  workerToken: string,
+  maxAttempts: number | undefined,
+  dbClient?: any,
+): Promise<ProcessWebhookResult> {
+  const res = await processPaymentWebhookEvent(evt, dbClient);
+  if (res.status === WebhookEventStatus.PROCESSED) {
+    await completePaymentWebhookEvent(evt.id, workerToken, dbClient);
+  } else {
+    await failPaymentWebhookEvent(
+      {
+        id: evt.id,
+        workerToken,
+        errorMessage: res.error ?? "Webhook processing failed",
+        maxAttempts: maxAttempts ?? 5,
+      },
+      dbClient,
+    );
+  }
+  return res;
+}
+
+/**
+ * Inline processing for a webhook the current request just recorded. Claims the row under a lease
+ * first, so a concurrent batch worker can never process the same event twice, and always leaves the
+ * row in a terminal or retryable state. Returns null if the row was already claimed elsewhere.
+ * Events that fail here stay PENDING and are retried by processPendingPaymentWebhookBatch, which
+ * the /api/cron/billing sweep runs.
+ */
+export async function processRecordedPaymentWebhookEvent(
+  id: string,
+  options: { leaseDurationMs?: number; maxAttempts?: number; dbClient?: any } = {},
+): Promise<ProcessWebhookResult | null> {
+  const { workerToken, event } = await claimPaymentWebhookEventById(
+    id,
+    { leaseDurationMs: options.leaseDurationMs },
+    options.dbClient,
+  );
+  if (!event) return null;
+  return processAndSettleClaimedEvent(event as any, workerToken, options.maxAttempts, options.dbClient);
 }

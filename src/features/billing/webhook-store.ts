@@ -147,6 +147,37 @@ export async function claimPaymentWebhookBatch(
 }
 
 /**
+ * Claims ONE freshly recorded (PENDING) webhook event by its row id, so the receiving request can
+ * process it inline under a proper lease. Returns `event: null` when another worker already claimed
+ * it (or it is no longer PENDING); the caller must then leave it alone.
+ */
+export async function claimPaymentWebhookEventById(
+  id: string,
+  input: { leaseDurationMs?: number; workerToken?: string } = {},
+  client: Prisma.TransactionClient | typeof prisma = prisma,
+) {
+  const workerToken = input.workerToken ?? `wrk_${randomBytes(8).toString("hex")}`;
+  const now = new Date();
+  const leaseExpiresAt = new Date(now.getTime() + (input.leaseDurationMs ?? 30_000));
+
+  const { count } = await client.paymentWebhookEvent.updateMany({
+    where: { id: { in: [id] }, status: WebhookEventStatus.PENDING },
+    data: {
+      status: WebhookEventStatus.PROCESSING,
+      processingToken: workerToken,
+      leaseExpiresAt,
+      attempts: { increment: 1 },
+      updatedAt: now,
+    },
+  });
+  if (count !== 1) return { workerToken, event: null };
+
+  const event = await client.paymentWebhookEvent.findUnique({ where: { id } });
+  if (!event || event.processingToken !== workerToken) return { workerToken, event: null };
+  return { workerToken, event };
+}
+
+/**
  * Marks a claimed webhook event as successfully PROCESSED and clears the lease.
  */
 export async function completePaymentWebhookEvent(

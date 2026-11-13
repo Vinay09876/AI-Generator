@@ -3,15 +3,21 @@
 import { useState } from "react";
 import { PlusCircle } from "lucide-react";
 import { CreditStoreModal } from "./credit-store-modal";
+import { PurchasesUnavailableBadge } from "./purchases-unavailable";
 
 export function TopUpButton({
   currentBalance = 0,
   className,
+  purchasesEnabled,
 }: {
   currentBalance?: number;
   className?: string;
+  /** From getPurchaseAvailability() on the server. When false no store or order flow is rendered. */
+  purchasesEnabled: boolean;
 }) {
   const [isOpen, setIsOpen] = useState(false);
+
+  if (!purchasesEnabled) return <PurchasesUnavailableBadge />;
 
   return (
     <>

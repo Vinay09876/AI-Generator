@@ -142,14 +142,20 @@ export async function requestAccountDeletion(
     await tx.session.deleteMany({ where: { userId } });
     await tx.account.deleteMany({ where: { userId } });
 
-    // 6. De-identify Media Assets: mark storage pointers as pending deletion
-    // Cloud storage objects are marked for out-of-band asynchronous purging
+    // 6. Withdraw media assets from every access path, but KEEP the real object keys.
+    // storageKey/thumbnailKey are the only record of which Storage objects belong to this account;
+    // the operator purge in docs/runbooks/account-deletion-sop.md (Stage 4) selects them by userId and
+    // deletes the objects. Overwriting them (as an earlier version did) made the objects unpurgeable.
+    // No automatic deletion happens here: physical purge stays a verified, operator-run step.
+    await tx.generatedAsset.updateMany({ where: { userId }, data: { fileUrl: null } });
+    // Assets a moderator already hid keep their moderation attribution (hiddenBy/hiddenReason/hiddenAt).
     await tx.generatedAsset.updateMany({
-      where: { userId },
+      where: { userId, isHidden: false },
       data: {
-        storageKey: `pending_purge/${userId}`,
-        fileUrl: null,
-        thumbnailKey: null,
+        isHidden: true,
+        hiddenAt: now,
+        hiddenBy: "account-deletion",
+        hiddenReason: "Owner account deleted; storage objects pending operator purge.",
       },
     });
 

@@ -1,6 +1,5 @@
-import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
-import { ROUTES } from "@/lib/constants";
+import { redirectSignedOut } from "@/lib/session-guard";
 import { getWalletSummary } from "@/features/credits/queries";
 import { getProfile } from "@/features/users/queries";
 import { getActiveStudioJob } from "@/features/generations/queries";
@@ -17,7 +16,7 @@ import { ActiveJobRibbon } from "@/components/dashboard/active-job-ribbon";
 export default async function DashboardLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   const session = await auth();
   const userId = session?.user?.id;
-  if (!userId) redirect(ROUTES.login);
+  if (!userId) return redirectSignedOut();
 
   const [profile, { balance }, activeJob] = await Promise.all([
     getProfile(userId),

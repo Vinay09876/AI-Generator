@@ -54,19 +54,26 @@ flowchart TD
 
 | Variable Name | Description | Sensitivity | Staging Format / Value | Default Fallback |
 | :--- | :--- | :--- | :--- | :--- |
-| `DATABASE_URL` | PostgreSQL connection string (Transaction pooler or direct). | **SECRET** | `postgresql://postgres:[PASSWORD]@[HOST]:6543/postgres?pgbouncer=true` | None (Required) |
-| `DIRECT_URL` | Direct PostgreSQL connection string for Prisma migrations. | **SECRET** | `postgresql://postgres:[PASSWORD]@[HOST]:5432/postgres` | None (Required for migrations) |
+| `DATABASE_URL` | Runtime PostgreSQL connection string (Supabase pooler or direct) used by the app and the clipper worker. Must enable verified TLS: `sslmode=verify-full&sslrootcert=<absolute CA path>` (without `sslmode` node-postgres connects unencrypted). In containers, mount the Supabase root CA at that path. | **SECRET** | `postgresql://postgres.[REF]:[PASSWORD]@[POOLER-HOST]:5432/postgres?sslmode=verify-full&sslrootcert=/run/certs/supabase-root.crt` | None (Required) |
+| `MIGRATE_DATABASE_URL` | Optional. Prisma CLI only (`migrate deploy/status`); schema-engine TLS parameters. Must name the same database as `DATABASE_URL`, otherwise the CLI refuses to run (`prisma/cli-database-url.ts`). Not used at build time. | **SECRET** | `...?sslmode=require&sslcert=<CA path>&sslaccept=strict` | Falls back to `DATABASE_URL` |
 | `AUTH_SECRET` | Secret key for signing Auth.js session JWT tokens. | **SECRET** | 64-char hex (`openssl rand -hex 32`) | None (Required) |
+| `AUTH_TRUST_HOST` / `AUTH_URL` | One is required in production: `AUTH_TRUST_HOST=true` behind a proxy, or the canonical `AUTH_URL`. | Config | `true` | None (Required) |
 | `APP_ORIGIN` | Public canonical staging URL for CSRF validation. | Public | `https://staging.yourai.internal` | None (Required) |
-| `CRON_SECRET` | Bearer token authenticating external cron heartbeat requests. | **SECRET** | 64-char hex (`openssl rand -hex 32`) | None (Required) |
-| `FAL_KEY` | Fal.ai API key for queue submission and model inference. | **SECRET** | `fal_key_...` | None (Required for live video) |
+| `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_AI_API_TOKEN` | Workers AI credentials for image generation. | **SECRET** (token) | — | None (Required) |
+| `CRON_SECRET` | Bearer token for all three cron endpoints (§6). | **SECRET** | 64-char hex (`openssl rand -hex 32`) | None (Required; startup fails without it) |
+| `FAL_KEY` | Fal.ai API key for queue submission and model inference. | **SECRET** | `fal_key_...` | None (Required when `STAGE_8_QA_ALLOWLIST` is set) |
 | `FAL_WEBHOOK_URL` | Public webhook ingress URL delivered to Fal.ai. | Public | `${APP_ORIGIN}/api/webhooks/video/fal` | Automatically defaults to `${APP_ORIGIN}/api/webhooks/video/fal` |
 | `WEBHOOK_CORRELATION_SECRET` | Secret used to compute HMAC correlation tokens (`?token=`). | **SECRET** | 64-char hex (`openssl rand -hex 32`) | Falls back to `AUTH_SECRET` if unset |
 | `SUPABASE_URL` | Supabase project URL. | Public | `https://[PROJECT-ID].supabase.co` | None (Required) |
 | `SUPABASE_SECRET_KEY` | Supabase Service Role API key (Full administrative access). | **SECRET** | `eyJhbGciOi...` | None (Required) |
-| `SUPABASE_STORAGE_BUCKET` | Supabase bucket name for user video assets. | Public | `generated-assets` | Defaults to `generated-assets` |
-| `STAGE_8_QA_USER_EMAILS` | Comma-separated list of user emails authorized for Video UI. | Config | `qa@yourai.internal,dev@yourai.internal` | Empty (In production mode, blocks non-QA users) |
-| `NODE_ENV` | Runtime environment mode. | Config | `production` (or `staging`) | `development` |
+| `SUPABASE_STORAGE_BUCKET` | Private bucket for all generated and uploaded media (images, videos, clips, clipper uploads). | Public | `generated-assets` | None in production (Required; image storage has no default) |
+| `STAGE_8_QA_ALLOWLIST` | Video on-switch: comma-separated user IDs (preferred) or verified emails allowed to generate videos. The legacy name `STAGE_8_QA_USER_EMAILS` is **not read** by the app (startup validation flags it). | Config | `<qa-user-id>` | Empty = video disabled for everyone |
+| `ADMIN_USER_IDS` | Comma-separated user IDs with admin/moderation access. | Config | `<admin-user-id>` | Empty = no admins |
+| `CLIPPER_SUBMISSIONS_ENABLED` | Clipper on-switch for new submissions (production: ON only when exactly `true`). Enable only while a clipper worker is running. | Config | `false` | OFF |
+| `CLIPPER_WORKER_ENABLED` | Worker process opt-in (worker container only). | Config | `true` (worker only) | Worker refuses to start |
+| `NODE_ENV` | Runtime environment mode. Payments are disabled whenever this is `production`. | Config | `production` | `development` |
+
+Startup validation: `src/instrumentation.ts` runs `enforceStartupEnv()` (`src/lib/env-startup.ts`) when a server instance starts. In production any missing/invalid variable above aborts startup with an error that lists **names only**. Feature-specific variables are only required when the feature is switched on. Payment variables (`RAZORPAY_WEBHOOK_SECRET`, `MOCK_*`) are not required: purchases are disabled in production (see §6).
 
 ---
 
@@ -270,23 +277,34 @@ npx prisma migrate status
 
 ## 5. Supabase Private Storage Security Configuration
 
-User video generations contain private user content and must never be exposed publicly.
+User generations and uploads contain private user content and must never be exposed publicly. The application never creates the bucket; an operator creates it once per environment.
 
 ---
 
 ### Configuration Procedure
 
-1. **Create Storage Bucket**:
+1. **Create Storage Bucket** (one bucket serves image, video and clipper):
    In the Supabase Dashboard (`Storage` -> `Buckets`) or via Supabase Management API:
    - **Bucket Name**: `generated-assets`
    - **Public Bucket**: **OFF** (Strictly Private)
-   - **Allowed MIME types**: `video/mp4`, `image/jpeg`, `image/png`, `image/webp`
-   - **Max file size limit**: `100 MB`
+   - **Allowed MIME types**: exactly `image/webp`, `video/mp4`, `video/quicktime`, `video/webm`
+   - **Max file size limit**: `52428800` bytes (50 MiB)
+
+   Why these values (code limits; the bucket must be at least as permissive, and no more):
+
+   | Feature | Objects written | MIME | App limit |
+   | :--- | :--- | :--- | :--- |
+   | Image | `users/{userId}/images/{jobId}/{assetId}.webp` | `image/webp` | 5 MiB |
+   | Video | `users/{userId}/videos/{jobId}/{assetId}.mp4` + WebP poster | `video/mp4`, `image/webp` | 35 MiB / 1 MiB |
+   | Clipper uploads | `ephemeral/users/{userId}/uploads/{id}.{mp4,mov,webm}` | `video/mp4`, `video/quicktime`, `video/webm` | 50 MiB (`CLIPPER_MAX_UPLOAD_BYTES`) |
+   | Clipper outputs | `users/{userId}/clips/{jobId}/...` + WebP thumbnails | `video/mp4`, `image/webp` | 30 MiB / 1 MiB |
+
+   A bucket created earlier as image-only (`image/webp`, 5 MiB) rejects every video and clipper write and must be updated before those features are enabled. Do not raise `CLIPPER_MAX_UPLOAD_BYTES` above the bucket limit.
 2. **Configure Storage Row-Level Security (RLS)**:
    Ensure that the `storage.objects` table enforces private access:
    - Service Role key (`SUPABASE_SECRET_KEY`) has full bypass permissions for backend ingestion and signing.
    - Public / Anonymous role (`anon`) has **ZERO** read or write permissions.
-   - User video paths must strictly follow the namespace: `users/{userId}/videos/{jobId}/{assetId}.mp4`.
+   - Object keys must stay inside the per-user namespaces listed above.
 
 ---
 
@@ -308,16 +326,28 @@ User video generations contain private user content and must never be exposed pu
 
 ## 6. External Cron Heartbeat Scheduling
 
-YourAI does not require expensive managed message queues (AWS SQS, Upstash, BullMQ). Background worker recovery and outbox event execution are triggered via periodic HTTP GET requests to `/api/cron/video-webhooks`.
+YourAI does not require expensive managed message queues (AWS SQS, Upstash, BullMQ). Background recovery is triggered by periodic authenticated HTTP GET requests. **Three endpoints must be scheduled**; all use the same `CRON_SECRET` and all fail closed (401) when it is unset in production.
+
+| Endpoint | Schedule | What it does | Needed when |
+| :--- | :--- | :--- | :--- |
+| `/api/cron/video-webhooks` | every 1–5 min | Sweeps expired webhook leases, processes the Fal.ai webhook outbox, ingests ready results, reconciles stale video jobs (refunds) | Video enabled |
+| `/api/cron/clipper` | every 5 min | Reconciles stale clip jobs (refunds), retries failed ephemeral-object cleanups, sweeps expired uploads | Clipper enabled |
+| `/api/cron/billing` | every 5–15 min | Retries stored payment webhook events left PENDING (or with expired leases) and reconciles stuck payment orders. Database-only; makes no gateway calls. A no-op while purchases are disabled | Always (harmless) |
+
+Image jobs have no cron: a stale image job is reconciled (and its credit refunded) the next time the same user generates or polls.
+
+The clipper also needs its **worker process** (it is not an HTTP endpoint): run the Docker image built with `--target clipper-worker` (bundled `dist/clipper-worker.mjs` + Alpine `ffmpeg`/`ffprobe`) with `CLIPPER_WORKER_ENABLED=true` and the same `DATABASE_URL` / `SUPABASE_*` variables as the app. Run exactly one worker; only then set `CLIPPER_SUBMISSIONS_ENABLED=true` on the web app.
+
+**Payments:** no live gateway is integrated. With `NODE_ENV=production`, `POST /api/billing/orders`, `POST /api/billing/verify` and `POST /api/webhooks/payments/razorpay` return `503 PURCHASES_DISABLED`, the mock gateway is rejected, and the UI shows "Purchases coming soon". This is enforced in code (`src/features/billing/availability.ts`), not by an environment flag.
 
 ---
 
 ### Configuration Procedure
 
-Configure an external cron scheduler (e.g. GitHub Actions, Cloudflare Cron Triggers, cron-job.org, or AWS EventBridge) to trigger the cron endpoint:
-- **Target URL**: `https://staging.yourai.internal/api/cron/video-webhooks`
+Configure an external cron scheduler (e.g. GitHub Actions, Cloudflare Cron Triggers, cron-job.org, or AWS EventBridge) for each endpoint in the table above:
+- **Target URLs**: `https://staging.yourai.internal/api/cron/video-webhooks`, `.../api/cron/clipper`, `.../api/cron/billing`
 - **HTTP Method**: `GET`
-- **Schedule**: Every 1 minute (`* * * * *`) or every 5 minutes (`*/5 * * * *`)
+- **Schedule**: as in the table (every 1–5 minutes for video, 5 minutes for clipper, 5–15 minutes for billing)
 - **Headers**:
   ```http
   Authorization: Bearer <CRON_SECRET>
@@ -336,8 +366,10 @@ jobs:
     steps:
       - name: Trigger Cron Worker
         run: |
-          curl -f -s -H "Authorization: Bearer ${{ secrets.STAGING_CRON_SECRET }}" \
-            "https://staging.yourai.internal/api/cron/video-webhooks"
+          for path in video-webhooks clipper billing; do
+            curl -f -s -H "Authorization: Bearer ${{ secrets.STAGING_CRON_SECRET }}" \
+              "https://staging.yourai.internal/api/cron/$path"
+          done
 ```
 
 ---
@@ -463,9 +495,10 @@ Complete this checklist prior to greenlighting staging for end-to-end testing:
 | **Phase 2** | Execute pre-migration database snapshot (`npm run backup:db`) | Operational | [ ] PENDING | |
 | **Phase 2** | Deploy Prisma migrations (`npx prisma migrate deploy`) | Configuration | [ ] PENDING | |
 | **Phase 2** | Verify migration status and schema check constraints | Verification | [ ] PENDING | |
-| **Phase 3** | Create private Supabase bucket `generated-assets` | Configuration | [ ] PENDING | |
+| **Phase 3** | Create private Supabase bucket `generated-assets` (50 MiB; `image/webp`, `video/mp4`, `video/quicktime`, `video/webm`) | Configuration | [ ] PENDING | |
 | **Phase 3** | Verify anonymous access is blocked on Supabase bucket | Verification | [ ] PENDING | |
-| **Phase 4** | Configure external cron heartbeat (1 to 5 min interval) | Configuration | [ ] PENDING | |
+| **Phase 4** | Configure external cron heartbeats for `video-webhooks`, `clipper` and `billing` | Configuration | [ ] PENDING | |
+| **Phase 4** | Run one clipper worker (`--target clipper-worker`) before enabling `CLIPPER_SUBMISSIONS_ENABLED` | Configuration | [ ] PENDING | |
 | **Phase 4** | Verify authenticated cron trigger returns HTTP 200 | Verification | [ ] PENDING | |
 | **Phase 5** | Verify public webhook ingress endpoint and Ed25519 validation | Verification | [ ] PENDING | |
 | **Phase 6** | Execute single controlled E2E test video generation | Verification | [ ] PENDING | |

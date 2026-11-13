@@ -5,6 +5,8 @@ node_modules/
 .next/
 out/
 build/
+# Bundled clipper worker (npm run build:worker)
+dist/
 # Written (and re-added) by `next dev`: only Next.js's managed agent-rules block, no project content.
 AGENTS.md
 

@@ -3,6 +3,7 @@
  */
 
 export * from "./config";
+export * from "./availability";
 export * from "./packages";
 export * from "./types";
 export * from "./calculator";

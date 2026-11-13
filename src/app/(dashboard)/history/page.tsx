@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { redirect } from "next/navigation";
 import { ArrowLeft, ArrowRight, History as HistoryIcon, LayoutGrid, LayoutList } from "lucide-react";
 import type { GenerationType } from "@/generated/prisma/client";
 import { auth } from "@/lib/auth";
+import { redirectSignedOut } from "@/lib/session-guard";
 import { APP_ROUTES, ROUTES } from "@/lib/constants";
 import { formatNumber } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -35,7 +35,7 @@ export default async function HistoryPage({
 }) {
   const session = await auth();
   const userId = session?.user?.id;
-  if (!userId) redirect(ROUTES.login);
+  if (!userId) return redirectSignedOut();
 
   const params = await searchParams;
   const type = parseTypeFilter(Array.isArray(params.type) ? params.type[0] : params.type);

@@ -4,9 +4,24 @@ import { authConfig } from "@/lib/auth.config";
 import { prisma } from "@/lib/prisma";
 import { loginSchema } from "@/features/auth/schemas";
 import { verifyPassword } from "@/features/auth/password";
+import { isSessionAccountActive } from "@/features/auth/account-status";
+
+const lookupAccountStatus = (userId: string) =>
+  prisma.user.findUnique({ where: { id: userId }, select: { isDeleted: true, isSuspended: true } });
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   ...authConfig,
+  callbacks: {
+    ...authConfig.callbacks,
+    // Runs on every session read in the Node.js runtime (pages, route handlers, server actions).
+    // JWT sessions are stateless, so this is where suspension and deletion take effect: returning
+    // null makes auth() return no session and clears the cookie. The proxy (src/proxy.ts) uses the
+    // DB-free authConfig and stays an optimistic redirect only.
+    async jwt(params) {
+      const token = await authConfig.callbacks.jwt(params);
+      return (await isSessionAccountActive(token?.sub, lookupAccountStatus)) ? token : null;
+    },
+  },
   providers: [
     Credentials({
       credentials: {

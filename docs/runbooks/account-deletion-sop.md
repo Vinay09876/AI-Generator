@@ -222,7 +222,15 @@ COMMIT;
 
 ### Stage 4: Supabase Storage & Media Asset Purge
 
-All generated video files, posters, and thumbnails stored in the private Supabase Storage bucket must be permanently purged.
+All generated images, videos, clips, posters, thumbnails and clipper uploads stored in the private Supabase Storage bucket must be permanently purged.
+
+> [!NOTE]
+> Self-service deletion (`requestAccountDeletion`) does **not** delete Storage objects and does **not** overwrite their keys: it sets `fileUrl = NULL` and hides every asset (`isHidden = true`; assets not already hidden by a moderator get `hiddenBy = 'account-deletion'`, moderator-hidden assets keep their moderation attribution), keeping `storageKey` / `thumbnailKey` intact so this stage can find every object. Physical purge is always this operator step. To list deleted accounts with objects still awaiting purge:
+> ```sql
+> SELECT DISTINCT a."userId" FROM "GeneratedAsset" a
+> JOIN "User" u ON u.id = a."userId"
+> WHERE u."isDeleted" = true AND a."storageKey" NOT LIKE 'purged://%';
+> ```
 
 1. **List User Media Assets**:
    Inspect storage keys associated with the user:
@@ -233,10 +241,11 @@ All generated video files, posters, and thumbnails stored in the private Supabas
    ```
 2. **Purge Objects from Supabase Storage**:
    Using the Supabase Admin API or AWS S3-compatible client targeting bucket `generated-assets`:
-   - Delete all objects prefixed with: `users/TARGET_USER_ID/`
+   - Delete all objects prefixed with: `users/TARGET_USER_ID/` and `ephemeral/users/TARGET_USER_ID/` (clipper uploads)
    - Example Supabase Storage CLI:
      ```bash
      supabase storage rm -r generated-assets/users/TARGET_USER_ID/
+     supabase storage rm -r generated-assets/ephemeral/users/TARGET_USER_ID/
      ```
 3. **Nullify Asset Storage Pointers in Database**:
    ```sql
@@ -276,7 +285,7 @@ The operator must confirm that PII is eliminated and ledger integrity remains un
    *Expected Result*: `wallet_balance` matches `ledger_sum` (e.g. 0 = 0), `is_balanced` is `TRUE`. Zero orphan foreign keys.
 
 3. **Storage Bucket Check**:
-   Confirm no objects remain under `generated-assets/users/TARGET_USER_ID/`.
+   Confirm no objects remain under `generated-assets/users/TARGET_USER_ID/` or `generated-assets/ephemeral/users/TARGET_USER_ID/`.
 
 4. **Record Audit Entry**:
    Log the completion in the internal operational ticket:

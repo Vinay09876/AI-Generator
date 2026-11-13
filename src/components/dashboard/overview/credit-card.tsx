@@ -2,6 +2,7 @@ import { Coins, RotateCcw, TrendingDown } from "lucide-react";
 import { formatNumber } from "@/lib/format";
 import { CountUp } from "../count-up";
 import { TopUpButton } from "@/components/billing/top-up-button";
+import { getPurchaseAvailability } from "@/features/billing/availability";
 
 type CreditCardProps = {
   balance: number;
@@ -21,7 +22,7 @@ export function CreditCard({ balance, usage }: CreditCardProps) {
         <h2 id="credits-heading" className="flex items-center gap-2 text-sm text-muted">
           <Coins className="size-4 text-violet-300" aria-hidden /> Credit balance
         </h2>
-        <TopUpButton currentBalance={balance} />
+        <TopUpButton currentBalance={balance} purchasesEnabled={getPurchaseAvailability().enabled} />
       </div>
       <p className="relative mt-3 font-display text-5xl font-semibold tracking-tight sm:text-6xl">
         <CountUp value={balance} />

@@ -16,6 +16,7 @@ import { isTrustedOrigin, resolveTrustedOrigins } from "@/lib/api";
 import { defaultRateLimiter } from "@/lib/rate-limit";
 import { createPaymentOrder, recordGatewayOrderAttempt } from "../orders";
 import { MockPaymentGatewayEngine } from "../mock-gateway";
+import { getPurchaseAvailability } from "../availability";
 import {
   BillingError,
   MockGatewayDisallowedError,
@@ -52,6 +53,16 @@ export async function handleCreateOrderRequest(
 ): Promise<Response> {
   if (request.method !== "POST") {
     return NextResponse.json({ error: "Method not allowed" }, { status: 405 });
+  }
+
+  // 0. Purchases are disabled until a real gateway + webhook processing exist (see ../availability).
+  // Checked before any other work so a disabled store never creates PaymentOrder rows.
+  const availability = getPurchaseAvailability();
+  if (!availability.enabled) {
+    return NextResponse.json(
+      { error: availability.message, code: availability.code },
+      { status: 503 },
+    );
   }
 
   // 1. Origin Check (CSRF protection)

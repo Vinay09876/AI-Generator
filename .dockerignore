@@ -1,7 +1,8 @@
-# Dependencies & build outputs
+# Dependencies & build outputs (rebuilt inside the image)
 node_modules
 .next
 out
+dist
 
 # Git & editor
 .git
@@ -9,18 +10,29 @@ out
 .vscode
 .idea
 
-# Environment files & secrets (pass via runtime environment)
+# Environment files & secrets — NEVER in the build context. Runtime values are injected by the
+# platform as environment variables. Only the value-free template is allowed through.
 .env
-.env*.local
-.env.development
-.env.test
-.env.production
+.env.*
+!.env.example
+*.pem
+*.key
+*.crt
+*.p12
+*.enc
+certs
+staging-security
 
-# Backups & local dumps
+# Backups & local dumps (migration SQL is applied by an operator from a reviewed checkout, never
+# from the image — see docs/runbooks/staging-setup-runbook.md)
 backups
 *.dump
 *.sql
 *.sql.gz
+
+# Local test/E2E artefacts
+scripts/e2e/artifacts
+tsconfig.tsbuildinfo
 
 # Logs & temp files
 npm-debug.log*

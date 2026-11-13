@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { PROVISIONAL_SERVER_CREDIT_PACKAGES } from "@/features/billing/packages";
 import { INVOICE_CONFIG_DEFAULTS, PROVISIONAL_TAX_ASSUMPTIONS } from "@/features/billing/config";
+import { getPurchaseAvailability } from "@/features/billing/availability";
 
 export const dynamic = "force-dynamic";
 
@@ -22,5 +23,6 @@ export async function GET() {
       metadata: pkg.metadata,
     }));
 
-  return NextResponse.json({ packages });
+  // Packages are informational; purchasing them is only possible when purchasesEnabled is true.
+  return NextResponse.json({ packages, purchasesEnabled: getPurchaseAvailability().enabled });
 }

@@ -16,16 +16,19 @@ import type { DetailedCreditTransactionItem } from "@/features/credits/queries";
 import { formatDateTime, formatNumber, formatRelative } from "@/lib/format";
 import { TaxInvoiceModal } from "./tax-invoice-modal";
 import { CreditStoreModal } from "./credit-store-modal";
+import { PurchasesUnavailableBadge } from "./purchases-unavailable";
 import { cn } from "@/lib/utils";
 
 interface LedgerProps {
   initialItems: DetailedCreditTransactionItem[];
   walletBalance: number;
+  /** From getPurchaseAvailability() on the server. When false no store or order flow is rendered. */
+  purchasesEnabled: boolean;
 }
 
 type FilterTab = "ALL" | "PURCHASES" | "USAGE" | "REFUNDS";
 
-export function TransactionLedger({ initialItems, walletBalance }: LedgerProps) {
+export function TransactionLedger({ initialItems, walletBalance, purchasesEnabled }: LedgerProps) {
   const [filter, setFilter] = useState<FilterTab>("ALL");
   const [balance, setBalance] = useState<number>(walletBalance);
   const [selectedInvoiceOrderId, setSelectedInvoiceOrderId] = useState<string | null>(null);
@@ -92,14 +95,18 @@ export function TransactionLedger({ initialItems, walletBalance }: LedgerProps) 
           </div>
 
           <div className="flex items-center gap-3">
-            <button
-              type="button"
-              onClick={() => setIsStoreOpen(true)}
-              className="inline-flex h-9 items-center gap-1.5 rounded-full bg-gradient-to-r from-violet to-fuchsia px-4 text-xs font-semibold text-white shadow-sm hover:opacity-90 transition-opacity"
-            >
-              <PlusCircle className="size-3.5" aria-hidden />
-              <span>Buy Credits</span>
-            </button>
+            {purchasesEnabled ? (
+              <button
+                type="button"
+                onClick={() => setIsStoreOpen(true)}
+                className="inline-flex h-9 items-center gap-1.5 rounded-full bg-gradient-to-r from-violet to-fuchsia px-4 text-xs font-semibold text-white shadow-sm hover:opacity-90 transition-opacity"
+              >
+                <PlusCircle className="size-3.5" aria-hidden />
+                <span>Buy Credits</span>
+              </button>
+            ) : (
+              <PurchasesUnavailableBadge />
+            )}
           </div>
         </div>
 
@@ -224,13 +231,15 @@ export function TransactionLedger({ initialItems, walletBalance }: LedgerProps) 
         )}
       </section>
 
-      {/* Credit Store Modal */}
-      <CreditStoreModal
-        isOpen={isStoreOpen}
-        onClose={() => setIsStoreOpen(false)}
-        currentBalance={balance}
-        onSuccess={(newBal) => setBalance(newBal)}
-      />
+      {/* Credit Store Modal (only when purchases are enabled) */}
+      {purchasesEnabled && (
+        <CreditStoreModal
+          isOpen={isStoreOpen}
+          onClose={() => setIsStoreOpen(false)}
+          currentBalance={balance}
+          onSuccess={(newBal) => setBalance(newBal)}
+        />
+      )}
 
       {/* Tax Invoice Modal */}
       {selectedInvoiceOrderId && (

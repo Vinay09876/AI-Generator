@@ -22,6 +22,8 @@ export const ROUTES = {
   home: "/",
   login: "/login",
   register: "/register",
+  /** Public page for a browser whose session cookie was rejected server-side (not in the proxy matcher). */
+  sessionEnded: "/session-ended",
   dashboard: "/dashboard",
   aiImage: "/ai-image",
   aiVideo: "/ai-video",

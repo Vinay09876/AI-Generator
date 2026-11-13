@@ -26,6 +26,7 @@
     "@types/pg": "^8.23.1",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
+    "esbuild": "0.28.2",
     "prisma": "^7.10.1",
     "tailwindcss": "^4.3.5",
     "tsx": "^4.23.15",
@@ -80,6 +81,8 @@
     "backup:storage": "tsx scripts/backup-storage.mts",
     "restore:storage": "tsx scripts/restore-storage.mts",
     "backup:set": "tsx scripts/backup-set.mts",
-    "restore:set": "tsx scripts/restore-set.mts"
+    "restore:set": "tsx scripts/restore-set.mts",
+    "build:worker": "node scripts/build-clipper-worker.mjs",
+    "test:post-s8": "tsx scripts/test-post-s8-remediation.mts"
   }
 }

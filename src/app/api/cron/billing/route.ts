@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { isVideoCronRequestAuthorized } from "@/features/video/cron-auth";
 import { reconcileStuckPaymentOrders } from "@/features/billing/reconciliation";
+import { processPendingPaymentWebhookBatch } from "@/features/billing/api/processor";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -19,6 +20,11 @@ export async function GET(request: Request) {
   const stuckMinutes = stuckMinutesStr ? parseInt(stuckMinutesStr, 10) : 15;
 
   try {
+    // 1. Retry stored payment webhook events that are PENDING (failed inline processing) or whose
+    // worker lease expired. Database-only: no gateway or other external call is made.
+    const webhooks = await processPendingPaymentWebhookBatch({ batchSize: 25 });
+
+    // 2. Reconcile payment orders stuck in non-terminal states.
     const summary = await reconcileStuckPaymentOrders({
       batchSize: isNaN(batchSize) ? 25 : batchSize,
       stuckThresholdMinutes: isNaN(stuckMinutes) ? 15 : stuckMinutes,
@@ -27,6 +33,7 @@ export async function GET(request: Request) {
     return NextResponse.json({
       success: true,
       timestamp: new Date().toISOString(),
+      webhooks: { processed: webhooks.processedCount, failed: webhooks.failedCount },
       summary,
     });
   } catch (err: any) {
