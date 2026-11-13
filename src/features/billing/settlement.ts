@@ -33,6 +33,8 @@ export interface SettlePaymentInput {
   currency?: string;
   /** Settlement trigger source */
   source: "webhook" | "client_verify" | "reconciliation";
+  /** Override flag when manually resolving an order under operator review */
+  allowReviewResolution?: boolean;
   /** Audit metadata */
   metadata?: Record<string, unknown>;
 }
@@ -312,7 +314,7 @@ export async function settlePaymentOrder(
     };
   }
 
-  if (order.status === PaymentOrderStatus.NEEDS_REVIEW) {
+  if (order.status === PaymentOrderStatus.NEEDS_REVIEW && !input.allowReviewResolution) {
     return {
       success: false,
       orderId: order.id,
@@ -332,11 +334,18 @@ export async function settlePaymentOrder(
       where: {
         id: order.id,
         status: {
-          in: [
-            PaymentOrderStatus.PENDING,
-            PaymentOrderStatus.CREATED,
-            PaymentOrderStatus.CREATION_UNKNOWN,
-          ],
+          in: input.allowReviewResolution
+            ? [
+                PaymentOrderStatus.PENDING,
+                PaymentOrderStatus.CREATED,
+                PaymentOrderStatus.CREATION_UNKNOWN,
+                PaymentOrderStatus.NEEDS_REVIEW,
+              ]
+            : [
+                PaymentOrderStatus.PENDING,
+                PaymentOrderStatus.CREATED,
+                PaymentOrderStatus.CREATION_UNKNOWN,
+              ],
         },
       },
       data: {
@@ -513,7 +522,7 @@ export async function expirePaymentOrder(
 /**
  * Helper: Transitions an order to NEEDS_REVIEW with an audit reason and records an attempt.
  */
-async function flagOrderForReview(
+export async function flagOrderForReview(
   client: Prisma.TransactionClient | typeof prisma,
   orderId: string,
   reviewReason: string,

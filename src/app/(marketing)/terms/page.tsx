@@ -99,8 +99,30 @@ export default function TermsOfServicePage() {
             <li>
               <strong>Non-Redeemable Promotional Units:</strong> Promotional credits are granted gratuitously for product demonstration,
               evaluation, and testing. Promotional credits have no cash value, are not legal tender, cannot be cashed out or redeemed for fiat
-              currency, and cannot be transferred between accounts. Paid credit purchases and commercial billing infrastructure are not yet
-              active on the platform.
+              currency, and cannot be transferred between accounts.
+            </li>
+            <li>
+              <strong>Commercial Credit Purchases &amp; Store Packages:</strong> Users may purchase credit top-ups in designated store
+              packages (e.g. Starter, Creator, Pro Studio). All package prices, credit amounts, and tier structures are provisional commercial
+              settings established for pre-release development and testing, not validated commercial unit economics. Payments are processed
+              through integrated payment gateways (operating in offline simulation mode during development with strictly ₹0 spend).
+            </li>
+            <li>
+              <strong>Provisional Purchase Receipts (No Statutory GST Invoices):</strong> Documents generated upon payment settlement are
+              strictly provisional purchase receipts acknowledging payment receipt for digital compute credits. Because the operating platform
+              entity is currently not registered under GST, <strong>no GST is charged or collected</strong>, and prices are not represented as
+              tax-inclusive. Official statutory GST tax invoice issuance remains disabled pending formal corporate registration, GSTIN provisioning,
+              and place-of-supply review by a qualified Chartered Accountant (CA).
+            </li>
+            <li>
+              <strong>Financial Record Retention Scope:</strong> Payment orders, gateway references, and double-entry transaction ledgers
+              are retained for accounting reconciliation and transaction auditability in accordance with applicable platform requirements.
+              The platform does not claim a universal or blanket eight-year retention requirement across all record categories.
+            </li>
+            <li>
+              <strong>No Unverified Regulatory Compliance Claims:</strong> {SITE.name} makes no representation or claim of universal DPDP,
+              GDPR, GST, or statutory legal compliance without appropriate independent verification. Dedicated moderation queues, abuse
+              reporting channels, self-service account deletion, and verified support contact details remain pre-launch operational requirements.
             </li>
             <li>
               <strong>Credit Debiting &amp; Automatic Failure Restorations:</strong> Credits debited for a generation job are restored to your account ledger under the following implemented conditions:

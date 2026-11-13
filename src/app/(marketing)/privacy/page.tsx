@@ -143,15 +143,20 @@ export default function PrivacyPolicyPage() {
           <h2 className="text-xl font-semibold text-foreground">6. Data Retention &amp; Account Deletion Status</h2>
           <p>
             We retain account data and generation records for as long as your account exists to provide history, gallery access, and auditability.
+            Payment orders, gateway transaction identifiers, and double-entry credit ledgers are retained for accounting reconciliation and transaction
+            auditability in accordance with applicable platform requirements. The platform does not claim a universal eight-year retention requirement
+            across all data categories.
+          </p>
+          <p>
             The Service does not operate an automated deletion schedule for generated media files. Users should download assets they wish to keep permanently.
           </p>
           <div className="rounded-2xl border border-amber-300/20 bg-amber-400/[0.06] p-4 text-amber-100">
-            <h3 className="text-sm font-semibold text-amber-200">Notice Regarding Account Deletion</h3>
+            <h3 className="text-sm font-semibold text-amber-200">Notice Regarding Pre-Launch Operational Requirements</h3>
             <p className="mt-1 text-xs leading-relaxed text-amber-200/80">
               Automated self-service account deletion is currently unsupported in software. The relational data schema maintains
-              strict transactional integrity across concurrent budget reservations, ledger credits, generation jobs, and generated asset records. Due to these
-              architectural dependencies, automated self-service account deletion is currently disabled. Manual deletion workflows and
-              dedicated administrative closure channels will be established prior to public launch.
+              strict transactional integrity across concurrent budget reservations, ledger credits, generation jobs, and generated asset records.
+              Automated self-service account deletion, operational abuse intake queues, and administrative moderation tools remain pre-launch
+              operational requirements that will be established prior to public launch.
             </p>
           </div>
         </section>
@@ -168,9 +173,10 @@ export default function PrivacyPolicyPage() {
         <section className="space-y-3">
           <h2 className="text-xl font-semibold text-foreground">8. Operator Contact &amp; Grievances</h2>
           <p>
-            {SITE.name} is currently in active pre-release development. In accordance with applicable data protection regulations
-            (including India&apos;s Digital Personal Data Protection Act), verified Data Protection Officer (DPO) and grievance redressal
-            contact addresses will be published on this page before public commercial availability.
+            {SITE.name} is currently in active pre-release development. No representation or claim of universal DPDP, GDPR,
+            or general statutory compliance is made without appropriate independent verification. In accordance with applicable data
+            protection regulations (including India&apos;s Digital Personal Data Protection Act), verified Data Protection Officer (DPO)
+            and grievance redressal contact addresses will be formally published on this page before general public commercial availability.
           </p>
         </section>
       </div>

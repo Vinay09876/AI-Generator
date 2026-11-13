@@ -33,7 +33,7 @@ AI Image & Video Generator roadmap:
 | 8.1 | Staging Readiness Assessment | ✅ Complete — Comprehensive staging readiness audit across secrets, migrations, Supabase storage, Fal.ai ingress, cron scheduling, operator tooling, diagnostics, offline/live test boundaries, and 7-phase staging setup checklist. |
 | 8.2 | Zero-Cost Operational Preparation | ✅ Complete — Production Operator CLI (`scripts/resolve-ambiguous-job.mts`) with physical storage verification, Account Deletion SOP (`docs/runbooks/account-deletion-sop.md`), Staging Runbook (`docs/runbooks/staging-setup-runbook.md`), 74 CLI safety tests, 1,196 passing offline tests across 15 suites. Commit `c6b73f3` (pushed). |
 | 9 | AI Video Clipper | ✅ Complete — Commit `a1b9267` (pushed). Batches 1–7 complete, 420 tests passing across 11 suites, 16/16 browser E2E scenarios passed, production build verified. |
-| 10 | Unified Platform & Payments | 🔄 In Progress — Batch 0 approved; Batch 1 (Domain Config, Dynamic Unit Economics Calculator, Payment Gateway Abstraction & Secure Offline Mock; 87 tests) complete. |
+| 10 | Unified Platform & Payments | ✅ Complete — Batches 1–6 complete. Payment orders, atomic ACID settlement, server-side package pricing, durable webhook processing with Fast-ACK, unified cross-studio dashboard & history, credit store top-ups, transaction ledger, provisional receipts, operator payment reconciliation tooling, grounded legal policy updates, and full cross-suite regression verified (all offline suites passing, TypeScript clean, Next.js production build verified). |
 
 ## 3. Tech stack
 
@@ -1694,3 +1694,53 @@ model PaymentWebhookEvent {
     - Orders must be in `PAID` status before a receipt can be retrieved (`order.status === "PAID"`). Non-paid or pending orders return HTTP 400.
     - Zero live gateway calls or credentials utilized; mock checkout simulation verifies authoritative HMAC-SHA256 signatures in dev/test, ensuring ₹0 spend compliance.
 - **Batch 6**: Legal Policy Updates, Operator Payment Reconciliation Tooling & Full Regression.
+  - **Status**: ✅ Complete & Verified.
+  - **Deliverables**:
+    - `src/features/billing/reconciliation.ts`:
+      - Production-grade reconciliation engine (`reconcilePaymentOrder`, `reconcileStuckPaymentOrders`).
+      - Resolves stuck `PENDING`, `CREATED`, and `CREATION_UNKNOWN` orders against gateway records.
+      - Safeguard 2 (CREATION_UNKNOWN lookup safety): Distinguishes authoritative gateway confirmation of non-creation from lookup failures, timeouts, incomplete data, or unconfigured engines. Only marks `FAILED` with `GATEWAY_ORDER_NOT_FOUND` when non-creation is authoritatively confirmed; all uncertain outcomes remain in `NEEDS_REVIEW` (`CREATION_LOOKUP_FAILED`, `GATEWAY_UNAVAILABLE_FOR_CREATION_CHECK`, `INCOMPLETE_GATEWAY_RESPONSE`). Never automatically retries ambiguous order creation.
+      - Escalates discrepancies immediately to `NEEDS_REVIEW` (`AMOUNT_MISMATCH`, `CURRENCY_MISMATCH`, `GATEWAY_MISMATCH`) with 0 credits allocated.
+      - Single-settlement guarantee: `already_settled` idempotency prevents duplicate wallet crediting.
+      - Safeguard 1 (Operator approval strictly enforces payment verification): Operator approval may authorize resolution of a review status, but never bypasses verification of an actual captured payment. Authoritative gateway evidence (status `PAID`, non-empty payment ID, matching amount, matching currency, matching order association) is required before settlement. Rejects approval with auditable reasons (`MISSING_GATEWAY_EVIDENCE`, `GATEWAY_ORDER_NOT_FOUND`, `GATEWAY_PAYMENT_NOT_CAPTURED`, `AMOUNT_MISMATCH`, `CURRENCY_MISMATCH`, `AMBIGUOUS_GATEWAY_EVIDENCE`) when evidence is missing, uncaptured, ambiguous, or mismatched.
+      - Operator manual review resolution workflow: supports explicit operator `approve` (atomically settles with `allowReviewResolution: true`, crediting wallet once) and `reject` (marks order `FAILED`).
+      - Structured reconciliation audit history appended to `PaymentOrder.metadata.reconciliationHistory` (`timestamp`, `action`, `previousStatus`, `newStatus`, `operatorId`, `reason`).
+      - Expired order transition for abandoned checkouts exceeding session TTL.
+      - Bounded batch reconciliation sweep (`reconcileStuckPaymentOrders`) with cursor-safe limits and concurrency control.
+    - `src/features/billing/settlement.ts`:
+      - Added `allowReviewResolution` parameter to `SettlePaymentInput`, permitting atomic transition of `NEEDS_REVIEW` orders to `PAID` under explicit operator resolution while strictly maintaining all financial, gateway, currency, amount, and snapshot integrity validations. `allowReviewResolution` only permits the guarded status transition; it never disables financial validation.
+      - Exported `flagOrderForReview` helper for reuse across reconciliation and settlement flows.
+    - `src/features/billing/api/reconcile-handler.ts`:
+      - Authenticated operator reconciliation API handler (`handleReconcileRequest`).
+      - Enforces caller session authentication (HTTP 401 `UNAUTHORIZED`) and operator role authorization (`ADMIN` / `OPERATOR` / allowlist, HTTP 403 `FORBIDDEN`).
+      - Bounded sliding window rate limiting (30 requests/min per operator).
+      - Rejects unverified operator approvals with HTTP 422 `UNPROCESSABLE_ENTITY`, preserving review status.
+      - Supports single-order reconciliation (`orderId` or `receipt`) with optional operator resolution (`approve` / `reject`) and batch sweep (`batch: true`).
+    - `src/app/api/billing/reconcile/route.ts`:
+      - Protected Next.js 16 dynamic API route (`export const dynamic = "force-dynamic"`) delegating `POST` requests to `handleReconcileRequest`.
+    - `src/features/billing/api/processor.ts`:
+      - Added `sanitizeWebhookError(err)` helper to ensure sensitive tokens, signatures, secret keys, or passwords never leak into error messages, logs, or stored event metadata.
+    - `src/app/(marketing)/terms/page.tsx`:
+      - Section 4 updated to clarify provisional purchase receipt status, explicitly disclaiming statutory tax invoice status while supplier GST registration is pending.
+      - Section 8 updated to document accurate commercial settings, configurable quotas, and server-authoritative package pricing.
+      - Sections 11 & 12 updated to reflect truthful, grounded operational boundaries and pre-launch requirements without unverified statutory claims.
+    - `src/app/(marketing)/privacy/page.tsx`:
+      - Section 6 updated to scope financial data retention strictly to legitimate platform accounting records, removing universal 8-year statutory retention claims pending entity registration.
+      - Section 8 updated with realistic pre-launch operational requirements and verified subprocessor boundaries.
+    - `scripts/test-billing-batch6.mts`:
+      - 100/100 tests passing across:
+        - Stuck PENDING order reconciliation with successful gateway capture.
+        - Ambiguous CREATION_UNKNOWN order handling with authoritative non-creation vs lookup error/timeout vs unconfigured engine vs incomplete data safeguards.
+        - Parameter mismatch escalation (AMOUNT_MISMATCH, CURRENCY_MISMATCH).
+        - Idempotency and single-settlement invariant (zero double-crediting).
+        - Operator manual review workflow with verified payment approval vs rejection on missing, mismatched, uncaptured, or ambiguous evidence.
+        - Expired order reconciliation for abandoned checkouts.
+        - Bounded batch reconciliation sweep.
+        - Authenticated operator reconciliation API handler (auth, role, rate limit, verified approve HTTP 200, unverified approve HTTP 422).
+        - Webhook lease recovery, duplicate idempotency, and unknown event safety.
+  - **Decisions & Limitations Recorded**:
+    - ₹0 spend strictly maintained; zero live gateway API calls or real credentials used.
+    - Zero database migrations applied; zero remote Supabase mutations performed.
+    - Standard tenant users cannot invoke reconciliation actions; reconciliation is strictly gated to authenticated operators with audit recording.
+    - Operator approval strictly requires verified gateway capture evidence; never fabricates dummy payment IDs or bypasses financial validation.
+    - Ambiguous order creation never re-initiates checkout creation to prevent duplicate customer charges.

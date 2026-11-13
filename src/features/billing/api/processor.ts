@@ -28,6 +28,12 @@ export interface ProcessWebhookResult {
   error?: string;
 }
 
+function sanitizeWebhookError(msg: string): string {
+  return msg
+    .replace(/(?:key|secret|token|password|auth|signature)=['"]?[^'"\s]+['"]?/gi, "$1=[REDACTED]")
+    .replace(/bearer\s+[a-zA-Z0-9_\-\.]+/gi, "Bearer [REDACTED]");
+}
+
 /**
  * Processes a single claimed payment webhook event payload.
  */
@@ -129,11 +135,12 @@ export async function processPaymentWebhookEvent(
       status: WebhookEventStatus.PROCESSED,
     };
   } catch (err: any) {
+    const rawError = String(err?.message ?? err);
     return {
       eventId: event.eventId,
       eventType: event.eventType,
       status: WebhookEventStatus.FAILED,
-      error: String(err?.message ?? err),
+      error: sanitizeWebhookError(rawError),
     };
   }
 }
