@@ -1,0 +1,66 @@
+# Builds the application Docker images on GitHub-hosted runners to prove they build.
+# Build only: nothing is pushed to a registry or deployed, and no secrets are used or needed.
+# Images (Dockerfile targets):
+#   web             -> target `runner`          (Next.js standalone server; the Dockerfile's default)
+#   clipper-worker  -> target `clipper-worker`  (bundled FFmpeg render worker)
+name: Docker build
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: docker-build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build ${{ matrix.image }} image
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: web
+            target: runner
+          - image: clipper-worker
+            target: clipper-worker
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      # The build context is the clean checkout, so untracked local files (.env, certs/,
+      # staging-security/) never exist here; .dockerignore excludes them as well. This guard fails
+      # the job if any such file is ever committed.
+      - name: Refuse secret material in the build context
+        run: |
+          bad=$(git ls-files | grep -E '(^|/)\.env($|\.)|(^|/)certs/|(^|/)staging-security/|\.(pem|key|crt|p12|enc)$' | grep -vx '\.env\.example' || true)
+          if [ -n "$bad" ]; then
+            echo "::error::Tracked files must not enter the Docker build context:"
+            echo "$bad"
+            exit 1
+          fi
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Build ${{ matrix.image }} (target ${{ matrix.target }})
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: Dockerfile
+          target: ${{ matrix.target }}
+          push: false
+          load: false
+          provenance: false
+          tags: yourai-${{ matrix.image }}:${{ github.sha }}
+          cache-from: type=gha,scope=${{ matrix.image }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.image }}
