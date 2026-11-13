@@ -9,6 +9,7 @@ import { getCreditTransactionsPage, getCreditUsage, getWalletSummary } from "@/f
 import { getProfile, getSignInMethods } from "@/features/users/queries";
 import { Avatar } from "@/components/dashboard/user-summary";
 import { LogoutButton } from "@/components/dashboard/logout-button";
+import { DeleteAccountModal } from "@/components/dashboard/delete-account-modal";
 import { PageHeader } from "@/components/dashboard/page-header";
 import { RevealGroup, RevealItem } from "@/components/dashboard/reveal";
 import { TransactionLedger } from "@/components/billing/transaction-ledger";
@@ -99,7 +100,8 @@ export default async function SettingsPage() {
               <dd className="mt-1.5 text-sm text-foreground/90">Signed in on this device</dd>
             </div>
           </dl>
-          <div className="mt-6 flex justify-end border-t border-white/[0.06] pt-5">
+          <div className="mt-6 flex items-center justify-between border-t border-white/[0.06] pt-5">
+            <DeleteAccountModal hasPassword={methods.password} creditBalance={wallet.balance} />
             <LogoutButton className="border border-white/10 px-4" />
           </div>
         </Panel>
@@ -137,7 +139,7 @@ export default async function SettingsPage() {
                 <strong>Asset Storage:</strong> Generated images are stored in a private Supabase Storage bucket in Tokyo (AWS ap-northeast-1). Access is restricted to 10-minute HMAC-signed URLs issued only after session ownership verification.
               </p>
               <p>
-                <strong>Account Deletion:</strong> Self-service account deletion is currently unsupported in software. Active budget reservations and relational credit ledger constraints prevent automated cascading deletion. Official operator contact and manual deletion procedures will be published prior to public launch.
+                <strong>Account Deletion:</strong> Self-service account deletion request is provided via settings. Direct relational CASCADE deletion is unsupported in software to satisfy immutable statutory financial ledger requirements. Anonymization (tombstoning) permanently erases personal data while retaining payment records.
               </p>
             </div>
           </div>

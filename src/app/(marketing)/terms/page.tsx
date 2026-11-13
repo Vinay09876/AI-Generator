@@ -229,9 +229,13 @@ export default function TermsOfServicePage() {
             for any conduct that violates these Terms, our Acceptable Use Policy, or applicable law, or for platform operational integrity.
           </p>
           <p>
-            <strong>Self-Service Account Deletion:</strong> Please be advised that automated self-service account deletion is currently
-            unsupported in the software due to data integrity constraints involving relational budget allocations, credit transaction
-            ledgers, generation jobs, and asset records. Dedicated operator contact channels and manual account closure procedures will be published prior to public launch.
+            <strong>Self-Service Account Deletion:</strong> Direct relational database CASCADE deletion is strictly
+            unsupported in the software to maintain transactional integrity, auditability of financial ledger lines,
+            and compliance with statutory record retention. Instead, an authenticated self-service account deletion request
+            can be submitted in Settings, executing irreversible account tombstoning: personal identity information
+            (name, email, password) is stripped and anonymized, active sessions and OAuth links are revoked, any unspent
+            promotional credits are forfeited, and subsequent sign-in is permanently blocked. Historical double-entry
+            financial orders and credit transactions are retained for statutory accounting reconciliation.
           </p>
         </section>
 

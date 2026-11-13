@@ -151,12 +151,14 @@ export default function PrivacyPolicyPage() {
             The Service does not operate an automated deletion schedule for generated media files. Users should download assets they wish to keep permanently.
           </p>
           <div className="rounded-2xl border border-amber-300/20 bg-amber-400/[0.06] p-4 text-amber-100">
-            <h3 className="text-sm font-semibold text-amber-200">Notice Regarding Pre-Launch Operational Requirements</h3>
+            <h3 className="text-sm font-semibold text-amber-200">Account Deletion &amp; Data Erasure Disclosure</h3>
             <p className="mt-1 text-xs leading-relaxed text-amber-200/80">
-              Automated self-service account deletion is currently unsupported in software. The relational data schema maintains
-              strict transactional integrity across concurrent budget reservations, ledger credits, generation jobs, and generated asset records.
-              Automated self-service account deletion, operational abuse intake queues, and administrative moderation tools remain pre-launch
-              operational requirements that will be established prior to public launch.
+              Direct physical database cascade deletion is strictly unsupported in software to preserve relational integrity and
+              statutory financial auditability. When you submit an authenticated account deletion request through your account settings,
+              the system executes an irreversible tombstoning procedure: all personal identifiable information (name, email address, password hash)
+              is permanently scrubbed and anonymized, all authentication sessions are revoked, and unspent balances are forfeited.
+              Payment order records and ledger balance entries are strictly preserved as immutable accounting records.
+              Media storage objects are de-linked and marked as pending deletion; physical byte erasure from object storage is not performed by an automated purge worker and remains pending a future operator cleanup workflow.
             </p>
           </div>
         </section>

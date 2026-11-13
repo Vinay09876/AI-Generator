@@ -59,6 +59,9 @@ export function createGenerationHandlers(deps: GenerationHttpDeps) {
   /** Map an error thrown before/while creating a job to the approved status contract. */
   function errorToResponse(error: unknown): Response {
     const name = (error as Error | null)?.name;
+    if (name === "ContentPolicyViolationError") {
+      return errorResponse(400, "CONTENT_POLICY_VIOLATION", (error as Error).message);
+    }
     if (name === "AccountingError") {
       const code = (error as { code: AccountingErrorCode }).code;
       const status = ACCOUNTING_STATUS[code] ?? 400;

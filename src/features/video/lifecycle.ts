@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { utcDayRange } from "@/lib/utc";
 import { debitWallet, jobDebitKey, jobRefundKey, refundJobDebit } from "@/features/credits/ledger";
 import { AccountingError } from "@/features/generations/errors";
+import { assertPromptContentSafety } from "@/features/moderation/safety";
 import {
   canGenerateVideoInStage8,
   resolveUserVideoEntitlement,
@@ -109,6 +110,7 @@ export function validateVideoRequestInput(input: {
     throw new AccountingError("INVALID_INPUT", promptRes.error ?? "Invalid video prompt.");
   }
   const prompt = promptRes.cleaned;
+  assertPromptContentSafety(prompt);
 
   const aspectRatio = input.aspectRatio ?? DEFAULT_VIDEO_SETTINGS.aspectRatio;
   if (!isSupportedVideoAspectRatio(aspectRatio)) {

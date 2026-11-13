@@ -169,7 +169,7 @@ export async function getRecentCompletedClipJobsForUser(userId: string, limit: n
  */
 export async function getClipAssetForDownload(userId: string, jobId: string, assetId: string, db: Db = prisma) {
   if (!SEGMENT_REGEX.test(jobId) || !SEGMENT_REGEX.test(assetId)) return null;
-  return db.generatedAsset.findFirst({
+  const asset = await db.generatedAsset.findFirst({
     where: {
       id: assetId,
       userId,
@@ -177,6 +177,10 @@ export async function getClipAssetForDownload(userId: string, jobId: string, ass
       type: AssetType.VIDEO,
       job: { userId, type: GenerationType.VIDEO_CLIP, status: GenerationStatus.COMPLETED },
     },
-    select: { storageKey: true },
+    select: { storageKey: true, isHidden: true, job: { select: { settings: true } } },
   });
+  if (!asset || (asset as any).isHidden || ((asset as any).job?.settings && ((asset as any).job.settings as any).contentHidden === true)) {
+    return null;
+  }
+  return { storageKey: asset.storageKey };
 }

@@ -73,6 +73,7 @@
     "test:dashboard:batch4": "tsx scripts/test-dashboard-batch4.mts",
     "test:billing:batch5": "tsx scripts/test-billing-batch5.mts",
     "test:billing:batch6": "tsx scripts/test-billing-batch6.mts",
+    "test:stage11": "tsx scripts/test-stage11-readiness.mts",
     "clipper:worker": "tsx --conditions=react-server scripts/clipper-worker.mts",
     "backup:db": "tsx scripts/backup-db.mts",
     "restore:db": "tsx scripts/restore-db.mts",

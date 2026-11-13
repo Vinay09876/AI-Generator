@@ -3,10 +3,12 @@ import { prisma } from "@/lib/prisma";
 
 /** Public profile fields only. Never selects passwordHash. Cached per request. */
 export const getProfile = cache(async (userId: string) => {
-  return prisma.user.findUnique({
+  const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { id: true, name: true, email: true, image: true, createdAt: true },
+    select: { id: true, name: true, email: true, image: true, createdAt: true, isDeleted: true, isSuspended: true },
   });
+  if (!user || user.isDeleted || (user as any).isSuspended) return null;
+  return user;
 });
 
 /** Which sign-in methods the account has. Returns booleans/names only, never the hash. */

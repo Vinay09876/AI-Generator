@@ -1,5 +1,4 @@
 import { timingSafeEqual } from "node:crypto";
-import { getObjectStorage } from "@/features/generations/storage";
 import { reconcileStaleVideoJobs } from "@/features/video/lifecycle";
 import { processPendingIngestionJobs } from "@/features/video/storage/ingestion";
 import type { SupabaseVideoObjectStorage } from "@/features/video/storage/supabase";
@@ -57,7 +56,9 @@ export async function handleVideoCronRequest(request: Request, context?: VideoCr
 
   try {
     const db = context?.db;
-    const storage = context?.storage ?? (getObjectStorage() as unknown as SupabaseVideoObjectStorage);
+    const storage =
+      context?.storage ??
+      (((await import("@/features/generations/storage")).getObjectStorage()) as unknown as SupabaseVideoObjectStorage);
 
     // 1. Recover crashed worker leases
     const sweepResult = await sweepStaleWebhookEvents(db);

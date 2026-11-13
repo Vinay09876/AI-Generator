@@ -279,7 +279,9 @@ export async function getUnifiedHistoryPage(
     select: unifiedJobSelect,
   });
 
-  const hasMore = items.length > take;
-  const page = hasMore ? items.slice(0, take) : items;
+  // Moderation filter: hidden content is completely excluded from user history & gallery views
+  const visibleItems = items.filter((j: any) => !(j.settings && (j.settings as any).contentHidden === true));
+  const hasMore = visibleItems.length > take;
+  const page = hasMore ? visibleItems.slice(0, take) : visibleItems;
   return { items: page, nextCursor: hasMore ? page[page.length - 1].id : null };
 }

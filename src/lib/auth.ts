@@ -20,12 +20,12 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         const { email, password } = parsed.data;
         const user = await prisma.user.findUnique({
           where: { email },
-          select: { id: true, name: true, email: true, image: true, passwordHash: true },
+          select: { id: true, name: true, email: true, image: true, passwordHash: true, isDeleted: true, isSuspended: true },
         });
 
         // Always run a bcrypt comparison so timing does not reveal whether the email exists.
         const valid = await verifyPassword(password, user?.passwordHash);
-        if (!user || !valid) return null;
+        if (!user || user.isDeleted || (user as any).isSuspended || !valid) return null;
 
         // Never return the password hash: this object becomes the session token payload.
         return { id: user.id, name: user.name, email: user.email, image: user.image };

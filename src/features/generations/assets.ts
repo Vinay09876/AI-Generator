@@ -76,10 +76,17 @@ export class AssetAccessError extends Error {
 
 type FindOwnedAsset = (where: { assetId: string; userId: string }) => Promise<{ storageKey: string } | null>;
 
-/** Default lookup: the asset must belong to the user (query is scoped by userId). */
+/** Default lookup: the asset must belong to the user (query is scoped by userId). Moderation hidden content is strictly excluded. */
 const findOwnedAssetInDb: FindOwnedAsset = async ({ assetId, userId }) => {
   const { prisma } = await import("@/lib/prisma");
-  return prisma.generatedAsset.findFirst({ where: { id: assetId, userId }, select: { storageKey: true } });
+  const asset = await prisma.generatedAsset.findFirst({
+    where: { id: assetId, userId },
+    select: { storageKey: true, isHidden: true, job: { select: { settings: true } } },
+  });
+  if (!asset) return null;
+  if ((asset as any).isHidden) return null;
+  if ((asset as any).job?.settings && ((asset as any).job.settings as any).contentHidden === true) return null;
+  return { storageKey: asset.storageKey };
 };
 
 /**

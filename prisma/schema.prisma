@@ -47,6 +47,13 @@ model User {
   /// are soft-deleted/anonymized to satisfy onDelete: Restrict constraints.
   isDeleted     Boolean   @default(false)
   deletedAt     DateTime?
+  /// Account suspension flag: suspended accounts cannot sign in or generate media.
+  isSuspended       Boolean              @default(false)
+  suspendedAt       DateTime?
+  suspensionReason  String?              @db.Text
+  warningCount      Int                  @default(0)
+  lastWarningAt     DateTime?
+  lastWarningReason String?              @db.Text
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
@@ -58,6 +65,8 @@ model User {
   assets        GeneratedAsset[]
   usageLogs     UsageLog[]
   paymentOrders PaymentOrder[]
+  reportsFiled   AbuseReport[]        @relation("Reporter")
+  reportsAgainst AbuseReport[]        @relation("ReportedUser")
 }
 
 model Account {
@@ -195,6 +204,11 @@ model GeneratedAsset {
   durationSeconds Float?
   /// Object key in private storage for video poster frame thumbnail (WebP). Null for static images.
   thumbnailKey    String?
+  /// Content moderation visibility: hidden assets cannot be downloaded or viewed in galleries.
+  isHidden        Boolean   @default(false)
+  hiddenAt        DateTime?
+  hiddenBy        String?
+  hiddenReason    String?   @db.Text
   createdAt       DateTime  @default(now())
 
   user User          @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -402,4 +416,75 @@ model PaymentWebhookEvent {
 
   @@unique([gateway, eventId])
   @@index([gateway, status, leaseExpiresAt])
+}
+
+enum AbuseReportCategory {
+  CSAM
+  EXTREME_VIOLENCE
+  SELF_HARM
+  HATE_SPEECH
+  HARASSMENT
+  COPYRIGHT_INFRINGEMENT
+  SPAM_OR_ABUSE
+  OTHER
+}
+
+enum ModerationQueueStatus {
+  PENDING_REVIEW
+  ACTIONED
+  DISMISSED
+}
+
+enum ModerationAction {
+  DISMISS
+  HIDE_CONTENT
+  SUSPEND_USER
+  WARN_USER
+}
+
+model AbuseReport {
+  id              String                @id @default(cuid())
+  targetType      String                // "JOB" | "ASSET" | "USER"
+  targetId        String
+  category        AbuseReportCategory
+  details         String                @db.Text
+  status          ModerationQueueStatus @default(PENDING_REVIEW)
+  reporterId      String?
+  reportedUserId  String?
+  reviewedBy      String?
+  reviewedAt      DateTime?
+  actionTaken     ModerationAction?
+  resolutionNotes String?               @db.Text
+  metadata        Json?
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+
+  reporter        User?                 @relation("Reporter", fields: [reporterId], references: [id], onDelete: SetNull)
+  reportedUser    User?                 @relation("ReportedUser", fields: [reportedUserId], references: [id], onDelete: SetNull)
+  auditLogs       ModerationAuditLog[]
+
+  @@index([status, createdAt])
+  @@index([targetType, targetId])
+  @@index([reportedUserId])
+  @@index([reporterId])
+}
+
+model ModerationAuditLog {
+  id             String                 @id @default(cuid())
+  reportId       String?
+  operatorId     String
+  action         ModerationAction
+  targetType     String                 // "JOB" | "ASSET" | "USER"
+  targetId       String
+  reason         String                 @db.Text
+  previousStatus ModerationQueueStatus?
+  newStatus      ModerationQueueStatus?
+  metadata       Json?
+  createdAt      DateTime               @default(now())
+
+  report         AbuseReport?           @relation(fields: [reportId], references: [id], onDelete: Cascade)
+
+  @@index([reportId])
+  @@index([targetType, targetId])
+  @@index([operatorId, createdAt])
 }

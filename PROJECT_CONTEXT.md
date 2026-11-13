@@ -34,6 +34,7 @@ AI Image & Video Generator roadmap:
 | 8.2 | Zero-Cost Operational Preparation | ✅ Complete — Production Operator CLI (`scripts/resolve-ambiguous-job.mts`) with physical storage verification, Account Deletion SOP (`docs/runbooks/account-deletion-sop.md`), Staging Runbook (`docs/runbooks/staging-setup-runbook.md`), 74 CLI safety tests, 1,196 passing offline tests across 15 suites. Commit `c6b73f3` (pushed). |
 | 9 | AI Video Clipper | ✅ Complete — Commit `a1b9267` (pushed). Batches 1–7 complete, 420 tests passing across 11 suites, 16/16 browser E2E scenarios passed, production build verified. |
 | 10 | Unified Platform & Payments | ✅ Complete — Batches 1–6 complete. Payment orders, atomic ACID settlement, server-side package pricing, durable webhook processing with Fast-ACK, unified cross-studio dashboard & history, credit store top-ups, transaction ledger, provisional receipts, operator payment reconciliation tooling, grounded legal policy updates, and full cross-suite regression verified (all offline suites passing, TypeScript clean, Next.js production build verified). |
+| 11 | Final Production Readiness & Launch Preparation | ✅ Complete — Self-service account deletion request & cryptographic tombstoning, PII anonymization, balancing ADMIN_ADJUSTMENT ledger forfeiture, statutory financial retention (PaymentOrder/CreditTransaction), session & OAuth revocation; internal pre-inference prompt heuristic filter (CSAM, extreme violence, self-harm, hate speech; zero provider calls, zero credits debited); abuse report submission & intake queue; role-based admin moderation APIs (queue inspection, DISMISS, HIDE_CONTENT, SUSPEND_USER, WARN_USER, immutable audit log); scheduled billing reconciliation sweep cron endpoint (/api/cron/billing); legal disclosure updates; Stage 11 test suite (122/122 passed); Section 18 Comprehensive Launch Readiness Checklist added. |
 
 ## 3. Tech stack
 
@@ -885,7 +886,7 @@ All Stage 8.2 deliverables and three focused reliability corrections have been e
   - Details the fundamental invariant: `CreditWallet.balance == SUM(CreditTransaction.amount)`.
   - Documents **Pattern A (Balancing Forfeiture Transaction)** and **Pattern B (Frozen Balance Preservation)** as proposed engineering patterns strictly requiring qualified legal and product approval before operational enforcement.
   - Prohibits silent balance overwrites or ledger deletions: never executes un-audited `UPDATE "CreditWallet" SET balance = 0` or deletes `CreditTransaction` rows.
-- **5-Stage Administrative Protocol**: Request & hold check, job draining & session revocation, PII tombstoning & ledger reconciliation, Supabase storage purge, and ticket audit closure.
+- **5-Stage Administrative Protocol**: Request & hold check, job draining & session revocation, PII tombstoning & ledger reconciliation, Supabase storage de-linking (with physical byte erasure pending a future operator cleanup workflow), and ticket audit closure.
 
 ### 3. Staging Configuration, Migration & Verification Runbook (`docs/runbooks/staging-setup-runbook.md`) (Focused Correction 3)
 - **Document ID**: `RUNBOOK-STAGING-001`.
@@ -1744,3 +1745,79 @@ model PaymentWebhookEvent {
     - Standard tenant users cannot invoke reconciliation actions; reconciliation is strictly gated to authenticated operators with audit recording.
     - Operator approval strictly requires verified gateway capture evidence; never fabricates dummy payment IDs or bypasses financial validation.
     - Ambiguous order creation never re-initiates checkout creation to prevent duplicate customer charges.
+
+## 18. Comprehensive Launch Readiness Checklist (Stage 11)
+
+### Category 1: Completed & Verified (Offline / Architecture / Verified in Test Suites)
+- **Core AI Studios**:
+  - Image Generator: Cloudflare FLUX.1 Schnell provider adapter, WebP quality 85 conversion, double-entry credit ledger, UTC daily quotas (10 jobs/day), Neuron daily budget tracking (9,500 Neurons/day cap), private Supabase Storage, 10-minute signed URLs, responsive studio UI, and client recovery.
+  - Video Generator: Tongyi Wan 2.1 via Fal.ai / Mock adapter, asynchronous Fast-ACK webhook lifecycle, Ed25519 signature verification, atomic ingestion lease, streaming MP4 upload, WebP poster frames, polling sync fallback, 15-minute stale timeout reconciliation.
+  - Video Clipper: Ingestion container magic-byte verification (MP4/MOV/WebM), boundary checks, audio/scene/highlight analysis runners, ASS subtitle rendering, FFmpeg filter graph assembly, mock & real FFmpeg execution engines, clip export and packaging.
+- **Billing, Pricing & Ledger**:
+  - Server-authoritative package catalogue (`STARTER_50`, `CREATOR_250`, `PRO_1000`, `STUDIO_2500`). Client-forged credit amounts, prices, currencies, or tax figures are strictly rejected.
+  - Atomic ACID settlement: PaymentOrder snapshot persistence, atomic credit allocation, and double-entry balancing `CreditTransaction`.
+  - Durable Razorpay Webhook Processing: HMAC-SHA256 signature verification, lease-based batch processor, idempotency deduplication.
+  - Operator Payment Reconciliation: Reconciles stuck `PENDING`, `CREATED`, and `CREATION_UNKNOWN` orders. Authoritative non-creation marks `FAILED`; ambiguous outcomes remain in `NEEDS_REVIEW`. Manual operator approval strictly requires verified captured payment evidence; resolution transition cannot bypass financial validation.
+  - Provisional Purchase Receipts: Transparent receipt generation with non-tax registration disclaimers. Zero GST/tax displayed as charged when `isRegisteredForGst === false`.
+- **Account Lifecycle & User Controls**:
+  - Authenticated self-service deletion request with password (or "DELETE" phrase for OAuth) confirmation.
+  - Blocks deletion if generation jobs are active (`PENDING` or `PROCESSING`), preventing orphaned background tasks.
+  - Cryptographic tombstoning: PII anonymized (`Deleted User`, `deleted_<id>_<time>@tombstone.local`, null password/image/emailVerified, `isDeleted = true`).
+  - Session and OAuth account revocation immediately upon deletion.
+  - Forfeiture of unspent promotional credits via audited balancing `ADMIN_ADJUSTMENT` ledger entry; wallet balance zeroed.
+  - Media asset storage pointers de-linked and marked as pending deletion (`storageKey = 'pending_purge/<userId>'`); physical byte erasure in cloud object storage is not performed by an automated purge worker and remains pending a future operator cleanup workflow to guarantee atomic database transaction rollback.
+  - Atomic ACID execution: all steps (wallet forfeiture, balancing ledger entry, session deletion, OAuth revocation, asset de-identification, and tombstoning) run within a single database transaction. Any failure rolls back the entire transaction, guaranteeing zero partial deletion state.
+  - Strict preservation of `PaymentOrder` and `CreditTransaction` rows (`onDelete: Restrict`) for statutory accounting compliance.
+  - Login blocked post-deletion in Auth.js `authorize` callback; session profile queries return null.
+- **Internal Content Safety & Moderation**:
+  - Fast-fail heuristic prompt filter for prohibited categories: CSAM, extreme violence & terrorism, self-harm & suicide encouragement, hate speech & direct violence.
+  - Throws `ContentPolicyViolationError` (HTTP 400). Zero live provider calls; zero credits debited on blocked requests.
+  - Abuse report intake queue (`POST /api/moderation/reports`) with rate limiting and category validation.
+  - Durable Prisma persistence: schema models (`AbuseReport`, `ModerationAuditLog`) and additive migration (`20261113093000_add_moderation_and_account_enforcement/migration.sql`) ensure reports and audit history survive process restarts and multi-instance deployments. Database write failures return HTTP 503 (`SERVICE_UNAVAILABLE`) with zero silent in-memory fallback. Moderation actions commit within an atomic database transaction before succeeding.
+  - Actual action enforcement: `HIDE_CONTENT` actively blocks content from user history (`getUnifiedHistoryPage`), image signing (`findOwnedAssetInDb`), video signing (`getSignedVideoAssetUrl`), and clip downloads (`getClipAssetForDownload`). `SUSPEND_USER` deletes user sessions immediately, blocks login, and invalidates profile queries. `WARN_USER` increments user warning count and records warning timestamp/reason. `DISMISS` records mandatory resolution notes and auditable log.
+  - Role-protected admin moderation API (`GET /api/admin/moderation`, `POST /api/admin/moderation/action`). Supports `DISMISS`, `HIDE_CONTENT`, `SUSPEND_USER`, `WARN_USER` with permanent audit entries.
+- **Operational Reliability & Security**:
+  - Timing-safe Bearer token authentication for scheduled cron routes (`/api/cron/video-webhooks`, `/api/cron/clipper`, `/api/cron/billing`). Fails closed in production when `CRON_SECRET` is missing.
+  - Process-local sliding window rate limiters across all sensitive submission endpoints.
+  - Safe client IP extraction respecting private network boundaries.
+  - Sensitive log sanitization (no leaked keys, tokens, signatures, or passwords).
+  - Disaster recovery streaming backup and restore with chunk-framed authenticated encryption (`YOURAI_ENC_V3`).
+- **Regression & Build Quality**:
+  - 18 test suites passing across all functional domains (Stage 11 test suite: 122/122 passed).
+  - TypeScript zero-error typecheck (`tsc --noEmit`).
+  - Next.js production build passing (`next build`).
+  - Diff hygiene clean (`git diff --check`).
+
+### Category 2: Implemented but Requiring Live Staging Verification
+- **Moderation Database Migration**: Additive migration `20261113093000_add_moderation_and_account_enforcement/migration.sql` prepared, generated and checked in; requires applying to staging/production database during scheduled maintenance (`npx prisma migrate deploy`).
+- **Razorpay Live Checkout Integration**: Verification of Razorpay modal popup, test card checkout, and frontend success callback on a publicly accessible staging domain with HTTPS.
+- **Razorpay Staging Webhook Delivery**: End-to-end receipt of live webhook payload from Razorpay dashboard to staging `/api/webhooks/payments/razorpay`, testing real network latency and TLS termination.
+- **Fal.ai Video Inference E2E**: Single live video generation with a live Fal.ai API key to verify external latency, real Ed25519 webhook signatures from Fal.ai infrastructure, and Supabase streaming ingestion under real network conditions.
+- **Host System FFmpeg Binaries**: Verification that production container environment has `ffmpeg` and `ffprobe` installed and accessible on system `PATH` with required codecs (libx264, aac).
+- **Scheduled Cron Heartbeat**: Verification that an external cron trigger (e.g. cron-job.org or Vercel Cron) successfully calls staging `/api/cron/billing`, `/api/cron/video-webhooks`, and `/api/cron/clipper` with Bearer header.
+- **Transactional Email Delivery**: Verification of SMTP/Resend provider configuration for password resets and verification emails if enabled in production environment.
+
+### Category 3: Requires External Legal, CA, or Operational Confirmation
+- **Legal Entity Incorporation**: Registration of formal corporate entity in India (e.g. Private Limited or LLP) to serve as the contracting merchant of record.
+- **Statutory GST Registration**: Application and acquisition of valid 15-character GSTIN from GST authorities.
+- **Chartered Accountant (CA) Tax Determination**: Formal tax advisory opinion on:
+  - Intra-state (CGST + SGST) vs Inter-state (IGST) split based on verified supplier state and customer place-of-supply data.
+  - Export classification and LUT (Letter of Undertaking) requirements for foreign cross-border customers.
+  - Treatment of input tax credit (ITC) for GPU cloud providers (Fal.ai, Cloudflare, Supabase).
+- **GST Statutory Tax Invoice Issuance**: Conversion of provisional purchase receipts to compliant Tax Invoices under Section 31 of CGST Act only AFTER GSTIN and tax rules are formally confirmed.
+- **Statutory Grievance Officer Appointment**: Formal designation of a resident Grievance Officer with physical address and grievance redressal contact mechanism as mandated by the Information Technology (Intermediary Guidelines and Digital Media Ethics Code) Rules, 2021.
+- **Formal Legal Counsel Review**: Qualified legal sign-off on Terms of Service, Privacy Policy (DPDP Act 2023 compliance), and Acceptable Use Policy before commercial launch.
+
+### Category 4: Blocked by Infrastructure or Credentials
+- **Production Razorpay Merchant Account**: Activation of live Razorpay production merchant account, business KYC submission, and provisioning of live Key ID / Key Secret.
+- **Production Fal.ai API Credentials**: Provisioning of funded production Fal.ai account with sufficient credits and dedicated concurrency tier.
+- **Production Cloudflare Workers AI Quota**: Provisioning of production Cloudflare account with paid Workers AI tier if daily image generation volume exceeds free tier (10,000 Neurons/day).
+- **Production DNS, SSL & CDN Routing**: Custom apex domain DNS mapping, edge SSL certificates, and WAF rules.
+- **Production Supabase Database Cluster**: Provisioning of dedicated production database with connection pooling (PgBouncer/Supavisor), automated point-in-time recovery (PITR), and private VPC storage.
+
+### Category 5: Explicitly Deferred (Post-Launch Roadmap)
+- **Multi-Currency & Global Gateway Support**: International currencies (USD, EUR, GBP) and foreign payment aggregators (Stripe, PayPal, Lemonsqueezy).
+- **Automated Recurring Subscriptions**: Razorpay Subscriptions / e-mandate recurring billing and billing cycle management.
+- **AI-Powered Deep Content Analysis**: Automated multi-modal computer vision classifiers for post-generation media inspection.
+- **Team & Enterprise Workspaces**: Multi-user seat management, shared team credit pools, and granular enterprise RBAC.
+- **Native Mobile Applications**: iOS and Android native clients.

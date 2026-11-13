@@ -239,10 +239,10 @@ export async function getSignedVideoAssetUrl(params: {
 
   const asset = await db.generatedAsset.findFirst({
     where: { id: assetId, userId },
-    select: { storageKey: true, thumbnailKey: true },
+    select: { storageKey: true, thumbnailKey: true, isHidden: true, job: { select: { settings: true } } },
   });
 
-  if (!asset) {
+  if (!asset || (asset as any).isHidden || ((asset as any).job?.settings && ((asset as any).job.settings as any).contentHidden === true)) {
     throw new VideoStorageError("NOT_FOUND", "Asset not found.", 404);
   }
 

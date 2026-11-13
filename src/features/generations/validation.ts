@@ -1,5 +1,6 @@
 import { PROMPT_MAX_LENGTH, PROMPT_MIN_LENGTH, isImageQuality } from "./config";
 import { AccountingError } from "./errors";
+import { assertPromptContentSafety } from "@/features/moderation/safety";
 
 /**
  * Pure request validation (no database access), shared by the job lifecycle and the HTTP
@@ -16,6 +17,7 @@ export function validateImageRequest(input: { prompt: unknown; quality: unknown;
   if (prompt.length < PROMPT_MIN_LENGTH || prompt.length > PROMPT_MAX_LENGTH) {
     throw new AccountingError("INVALID_INPUT", `Prompt must be ${PROMPT_MIN_LENGTH}-${PROMPT_MAX_LENGTH} characters.`);
   }
+  assertPromptContentSafety(prompt);
   if (!isImageQuality(input.quality)) throw new AccountingError("INVALID_INPUT", "Unknown quality option.");
   if (!isValidIdempotencyKey(input.idempotencyKey)) {
     throw new AccountingError("INVALID_INPUT", "Invalid request key.");
