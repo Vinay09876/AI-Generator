@@ -13,6 +13,7 @@
  */
 
 import { validateRuntimeEnv } from "@/lib/env";
+import { checkDatabaseTls } from "@/lib/database-tls";
 
 type RawEnv = Record<string, string | undefined>;
 
@@ -47,6 +48,7 @@ export function validateStartupEnv(env: RawEnv = process.env): StartupEnvReport 
     if (!isSet(env, "CRON_SECRET")) missing.add("CRON_SECRET");
     // Auth.js rejects requests from an untrusted host unless one of these is configured.
     if (env.AUTH_TRUST_HOST?.trim() !== "true" && !isSet(env, "AUTH_URL")) missing.add("AUTH_TRUST_HOST (or AUTH_URL)");
+    invalid.push(...productionTlsProblems(env));
   }
 
   // Video: the allowlist is the production on-switch; a key-less provider would fail every job.
@@ -109,10 +111,28 @@ export function enforceStartupEnvOrExit(env: RawEnv = process.env): void {
   }
 }
 
+/**
+ * Production TLS requirements shared by the web server and the clipper worker: the database
+ * connection must verify the server certificate and hostname, and Node's global TLS verification
+ * must not be switched off. Value-free reasons only.
+ */
+function productionTlsProblems(env: RawEnv): { name: string; reason: string }[] {
+  const problems: { name: string; reason: string }[] = [];
+  if (isSet(env, "DATABASE_URL")) {
+    const tls = checkDatabaseTls(env.DATABASE_URL);
+    if (!tls.ok) problems.push({ name: "DATABASE_URL", reason: tls.reason });
+  }
+  if (env.NODE_TLS_REJECT_UNAUTHORIZED?.trim() === "0") {
+    problems.push({ name: "NODE_TLS_REJECT_UNAUTHORIZED", reason: "disables TLS certificate verification; remove it" });
+  }
+  return problems;
+}
+
 /** Variables the standalone clipper worker process needs (it does not run instrumentation.ts). */
 export function validateClipperWorkerEnv(env: RawEnv = process.env): StartupEnvReport {
   const missing = ["DATABASE_URL", "SUPABASE_URL", "SUPABASE_SECRET_KEY", "SUPABASE_STORAGE_BUCKET"].filter(
     (n) => !isSet(env, n),
   );
-  return { ok: missing.length === 0, missing, invalid: [] };
+  const invalid = env.NODE_ENV === "production" ? productionTlsProblems(env) : [];
+  return { ok: missing.length === 0 && invalid.length === 0, missing, invalid };
 }

@@ -15,6 +15,10 @@ import { classifyAccount, isSessionAccountActive } from "../src/features/auth/ac
 import { hasSessionCookieName } from "../src/lib/session-cookie";
 import { validateStartupEnv, enforceStartupEnv, describeStartupEnvReport, validateClipperWorkerEnv } from "../src/lib/env-startup";
 import { resolvePrismaCliDatabaseUrl } from "../prisma/cli-database-url";
+import { checkDatabaseTls, SUPABASE_ROOT_CA_PATH } from "../src/lib/database-tls";
+import { X509Certificate } from "node:crypto";
+import { readFileSync } from "node:fs";
+import { resolve as resolvePath } from "node:path";
 
 let passed = 0;
 let failed = 0;
@@ -215,9 +219,10 @@ await test("session cookie detection (plain, __Secure-, chunked) ignores unrelat
 
 console.log("\n[4] Startup environment validation");
 const SENTINEL = "s3nt1nel-value-must-never-appear";
+const REPO_CA = resolvePath("config/tls/supabase-root-2021.crt");
 const fullProd = {
   NODE_ENV: "production",
-  DATABASE_URL: `postgresql://postgres:${SENTINEL}@db.example.supabase.co:5432/postgres`,
+  DATABASE_URL: `postgresql://postgres:${SENTINEL}@db.example.supabase.co:5432/postgres?sslmode=verify-full&sslrootcert=${encodeURIComponent(REPO_CA)}`,
   AUTH_SECRET: `${SENTINEL}-0123456789`,
   AUTH_TRUST_HOST: "true",
   APP_ORIGIN: "https://staging.example",
@@ -275,6 +280,73 @@ await test("payments need no variables in production (purchases disabled)", () =
 await test("clipper worker env check names missing storage/database variables", () => {
   const r = validateClipperWorkerEnv({ DATABASE_URL: "postgresql://x" });
   assert.deepEqual(r.missing, ["SUPABASE_URL", "SUPABASE_SECRET_KEY", "SUPABASE_STORAGE_BUCKET"]);
+});
+
+console.log("\n[4b] Production database TLS (Work Item 2)");
+const host = `postgresql://postgres.ref:${SENTINEL}@aws-0-ap-northeast-1.pooler.supabase.com:5432/postgres`;
+const exists = (p: string) => p === "/app/certs/supabase-root-2021.crt";
+await test("verify-full + existing sslrootcert passes", () =>
+  assert.deepEqual(checkDatabaseTls(`${host}?sslmode=verify-full&sslrootcert=/app/certs/supabase-root-2021.crt`, exists), { ok: true }));
+await test("no sslmode (= no TLS), require, verify-ca, no-verify and libpq-compat require are all rejected", () => {
+  for (const q of ["", "?sslmode=require&sslrootcert=/app/certs/supabase-root-2021.crt", "?sslmode=verify-ca&sslrootcert=/app/certs/supabase-root-2021.crt",
+    "?sslmode=no-verify", "?uselibpqcompat=true&sslmode=require", "?ssl=true", "?sslmode=disable"]) {
+    const r = checkDatabaseTls(`${host}${q}`, exists);
+    assert.equal(r.ok, false, `accepted: ${q || "(no params)"}`);
+  }
+});
+await test("verify-full without sslrootcert, or with a missing file, is rejected", () => {
+  assert.equal(checkDatabaseTls(`${host}?sslmode=verify-full`, exists).ok, false);
+  assert.equal(checkDatabaseTls(`${host}?sslmode=verify-full&sslrootcert=/nope/ca.crt`, exists).ok, false);
+});
+await test("loopback databases are exempt (never cross a network)", () => {
+  assert.equal(checkDatabaseTls("postgresql://postgres@127.0.0.1:5432/app", exists).ok, true);
+  assert.equal(checkDatabaseTls("postgresql://postgres@localhost:5432/app", exists).ok, true);
+});
+await test("repeated TLS/host parameters are refused (pg uses the LAST one)", () => {
+  const ok = `${host}?sslmode=verify-full&sslrootcert=/app/certs/supabase-root-2021.crt`;
+  for (const extra of ["&sslmode=no-verify", "&sslrootcert=/app/certs/supabase-root-2021.crt", "&ssl=1&ssl=0", "&uselibpqcompat=true&uselibpqcompat=false"]) {
+    const r = checkDatabaseTls(`${ok}${extra}`, exists);
+    assert.equal(r.ok, false, `accepted ${extra}`);
+  }
+  assert.equal(checkDatabaseTls(`${ok}&host=a.example&host=b.example`, exists).ok, false);
+});
+await test("a `host` query parameter decides the loopback exemption, as in pg", () => {
+  // URL host is loopback, but pg would connect to the remote query host: TLS rules must apply.
+  assert.equal(checkDatabaseTls("postgresql://postgres@localhost:5432/app?host=db.example.supabase.co", exists).ok, false);
+  // URL host is remote, but pg would connect to loopback: exempt.
+  assert.equal(checkDatabaseTls("postgresql://postgres@db.example.supabase.co:5432/app?host=127.0.0.1", exists).ok, true);
+});
+await test("production startup rejects a non-TLS DATABASE_URL and NODE_TLS_REJECT_UNAUTHORIZED=0, value-free", () => {
+  const r = validateStartupEnv({ ...fullProd, DATABASE_URL: `postgresql://postgres:${SENTINEL}@db.example.supabase.co:5432/postgres`, NODE_TLS_REJECT_UNAUTHORIZED: "0" });
+  assert.equal(r.ok, false);
+  assert.ok(r.invalid.some((i) => i.name === "DATABASE_URL" && /verify-full/.test(i.reason)));
+  assert.ok(r.invalid.some((i) => i.name === "NODE_TLS_REJECT_UNAUTHORIZED"));
+  const msg = describeStartupEnvReport(r);
+  assert.ok(!msg.includes(SENTINEL) && !msg.includes("db.example.supabase.co"), "URL or secret leaked");
+});
+await test("TLS policy is production-only for the web server (development unaffected)", () => {
+  const r = validateStartupEnv({ ...fullProd, NODE_ENV: "development", DATABASE_URL: `postgresql://postgres:${SENTINEL}@db.example.supabase.co:5432/postgres` });
+  assert.ok(!r.invalid.some((i) => i.name === "DATABASE_URL"));
+});
+await test("clipper worker enforces the same TLS policy in production only", () => {
+  const base = { DATABASE_URL: `${host}`, SUPABASE_URL: "https://x.supabase.co", SUPABASE_SECRET_KEY: SENTINEL, SUPABASE_STORAGE_BUCKET: "generated-assets" };
+  assert.equal(validateClipperWorkerEnv({ ...base, NODE_ENV: "development" }).ok, true);
+  const prod = validateClipperWorkerEnv({ ...base, NODE_ENV: "production" });
+  assert.equal(prod.ok, false);
+  assert.ok(prod.invalid.some((i) => i.name === "DATABASE_URL"));
+  assert.equal(validateClipperWorkerEnv({ ...base, NODE_ENV: "production", DATABASE_URL: `${host}?sslmode=verify-full&sslrootcert=${encodeURIComponent(REPO_CA)}` }).ok, true);
+});
+await test("bundled CA is the public Supabase Root 2021 CA and matches the Dockerfile pin and path", () => {
+  const PIN = "80:70:25:AD:50:D4:ED:21:9D:2C:9C:7D:29:9C:00:4F:82:4E:B0:0C:F7:F6:5A:FE:F6:07:D0:7B:72:E6:CA:FA";
+  const pem = readFileSync(REPO_CA, "utf8");
+  assert.ok(!/PRIVATE KEY/.test(pem), "private key material in CA file");
+  const cert = new X509Certificate(pem);
+  assert.match(cert.subject, /CN=Supabase Root 2021 CA/);
+  assert.equal(cert.ca, true);
+  assert.equal(cert.fingerprint256, PIN);
+  const dockerfile = readFileSync("Dockerfile", "utf8");
+  assert.equal(dockerfile.split(`sha256 Fingerprint=${PIN}`).length - 1, 2, "both runtime stages must pin the fingerprint");
+  assert.equal(dockerfile.split(`/app/config/tls/supabase-root-2021.crt ${SUPABASE_ROOT_CA_PATH}`).length - 1, 2, "both runtime stages must ship the CA");
 });
 
 console.log("\n[5] Prisma CLI database URL");

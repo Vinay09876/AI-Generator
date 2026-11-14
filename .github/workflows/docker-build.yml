@@ -42,7 +42,9 @@ jobs:
       # the job if any such file is ever committed.
       - name: Refuse secret material in the build context
         run: |
-          bad=$(git ls-files | grep -E '(^|/)\.env($|\.)|(^|/)certs/|(^|/)staging-security/|\.(pem|key|crt|p12|enc)$' | grep -vx '\.env\.example' || true)
+          # Only exceptions: the value-free env template and the public Supabase root CA (no private
+          # key; its SHA-256 fingerprint is pinned in the Dockerfile, so any other content fails the build).
+          bad=$(git ls-files | grep -E '(^|/)\.env($|\.)|(^|/)certs/|(^|/)staging-security/|\.(pem|key|crt|p12|enc)$' | grep -vx -e '\.env\.example' -e 'config/tls/supabase-root-2021\.crt' || true)
           if [ -n "$bad" ]; then
             echo "::error::Tracked files must not enter the Docker build context:"
             echo "$bad"

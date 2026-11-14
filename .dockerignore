@@ -22,6 +22,8 @@ dist
 *.enc
 certs
 staging-security
+# The ONE certificate allowed in: the public Supabase root CA (no private key), fingerprint-pinned in the Dockerfile.
+!config/tls/supabase-root-2021.crt
 
 # Backups & local dumps (migration SQL is applied by an operator from a reviewed checkout, never
 # from the image — see docs/runbooks/staging-setup-runbook.md)

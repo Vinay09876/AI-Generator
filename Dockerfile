@@ -5,7 +5,8 @@
 #   Clipper worker:             docker build --target clipper-worker -t pixora-clipper-worker .
 #
 # No secrets are needed or allowed at build time: .dockerignore keeps .env*, certificates and
-# keys out of the build context, and the builder stage fails if any .env file reaches the
+# keys out of the build context (sole exception: the public, fingerprint-pinned Supabase root CA
+# in config/tls/, shipped at /app/certs/ for verified database TLS), and the builder stage fails if any .env file reaches the
 # standalone output. All runtime configuration is injected as environment variables.
 # Database migrations are NOT run by these images (operator step: `npx prisma migrate deploy`
 # from a reviewed checkout — see docs/runbooks/staging-setup-runbook.md).
@@ -67,6 +68,13 @@ COPY --from=builder /app/dist/clipper-worker.mjs ./dist/clipper-worker.mjs
 # Build-time sanity check: the worker refuses to start without these binaries.
 RUN ffmpeg -version > /dev/null && ffprobe -version > /dev/null
 
+# Public Supabase root CA for verified database TLS (DATABASE_URL ...&sslmode=verify-full&sslrootcert=/app/certs/supabase-root-2021.crt).
+# Root-owned and read-only for the runtime user; the build fails unless it is exactly the pinned certificate.
+COPY --from=builder /app/config/tls/supabase-root-2021.crt /app/certs/supabase-root-2021.crt
+RUN openssl x509 -in /app/certs/supabase-root-2021.crt -noout -fingerprint -sha256 \
+      | grep -qx 'sha256 Fingerprint=80:70:25:AD:50:D4:ED:21:9D:2C:9C:7D:29:9C:00:4F:82:4E:B0:0C:F7:F6:5A:FE:F6:07:D0:7B:72:E6:CA:FA' \
+    && chmod 0444 /app/certs/supabase-root-2021.crt
+
 USER worker
 
 # Still requires CLIPPER_WORKER_ENABLED=true plus DATABASE_URL, SUPABASE_URL, SUPABASE_SECRET_KEY and
@@ -90,6 +98,13 @@ RUN addgroup --system --gid 1001 nodejs && \
 COPY --from=builder /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+
+# Public Supabase root CA for verified database TLS (see the clipper-worker stage). Root-owned, read-only,
+# fingerprint-pinned; src/lib/env-startup.ts refuses to start in production unless DATABASE_URL uses it.
+COPY --from=builder /app/config/tls/supabase-root-2021.crt /app/certs/supabase-root-2021.crt
+RUN openssl x509 -in /app/certs/supabase-root-2021.crt -noout -fingerprint -sha256 \
+      | grep -qx 'sha256 Fingerprint=80:70:25:AD:50:D4:ED:21:9D:2C:9C:7D:29:9C:00:4F:82:4E:B0:0C:F7:F6:5A:FE:F6:07:D0:7B:72:E6:CA:FA' \
+    && chmod 0444 /app/certs/supabase-root-2021.crt
 
 USER nextjs
 
