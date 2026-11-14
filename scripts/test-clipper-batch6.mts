@@ -30,7 +30,7 @@ async function test(name: string, fn: () => Promise<void> | void) {
   }
 }
 
-const ORIGIN = "https://app.yourai.test";
+const ORIGIN = "https://app.pixora.test";
 const USER = "usr_owner00001";
 const JOB = "job_queued00001";
 const ASSET = "ast_clip0000001";
@@ -391,7 +391,7 @@ async function run() {
   await test("download: owned asset → 302 to the signed URL, no-store, no-referrer, empty body", async () => {
     const signedArgs: string[][] = [];
     const { h } = handlers({
-      signDownload: async (u, j, a) => (signedArgs.push([u, j, a]), "https://proj.supabase.co/storage/v1/object/sign/b/k.mp4?token=t&download=yourai-clip.mp4"),
+      signDownload: async (u, j, a) => (signedArgs.push([u, j, a]), "https://proj.supabase.co/storage/v1/object/sign/b/k.mp4?token=t&download=pixora-clip.mp4"),
     });
     const res = await h.getClipDownload(get(dl), JOB, ASSET);
     assert.equal(res.status, 302);
@@ -431,9 +431,9 @@ async function run() {
       },
     };
     const s = new SupabaseClipperStorage(client as any, "b", "https://proj.supabase.co");
-    await s.createSignedUrl("k", CLIPPER_DOWNLOAD_URL_EXPIRY_SECONDS, { download: "yourai-clip-1.mp4" });
+    await s.createSignedUrl("k", CLIPPER_DOWNLOAD_URL_EXPIRY_SECONDS, { download: "pixora-clip-1.mp4" });
     await s.createSignedUrl("k", 600);
-    assert.deepEqual(seen[0], ["k", 60, { download: "yourai-clip-1.mp4" }]);
+    assert.deepEqual(seen[0], ["k", 60, { download: "pixora-clip-1.mp4" }]);
     assert.deepEqual(seen[1], ["k", 600]);
   });
   await test("adapter: a download URL on a foreign origin is rejected", async () => {

@@ -365,7 +365,7 @@ async function run() {
   // =========================================================================
   // 5. HTTP: discard by id, release-pending route, not gated by the switch
   // =========================================================================
-  const ORIGIN = "https://app.yourai.test";
+  const ORIGIN = "https://app.pixora.test";
   const post = (url: string, body: unknown, headers: Record<string, string> = {}) =>
     new Request(`${ORIGIN}${url}`, { method: "POST", headers: { "content-type": "application/json", origin: ORIGIN, ...headers }, body: JSON.stringify(body) });
   function handlers(store: MemStore, enabled = false) {

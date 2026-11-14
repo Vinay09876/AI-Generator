@@ -267,7 +267,7 @@ async function run() {
     ];
 
     const fabricatedPatterns = [
-      /@yourai\./i,
+      /@(yourai|pixora)\./i,
       /support@/i,
       /legal@/i,
       /privacy@/i,

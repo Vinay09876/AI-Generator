@@ -316,7 +316,7 @@ try {
 
   await scenario("download: same-origin route → 302 → attachment; saved file is a 1080x1920 H.264/AAC MP4", async () => {
     const [dl] = await Promise.all([page.waitForEvent("download", { timeout: 30_000 }), page.locator('a[aria-label^="Download"]').first().click()]);
-    assert(/^yourai-clip-[A-Za-z0-9_-]+\.mp4$/.test(dl.suggestedFilename()), `filename ${dl.suggestedFilename()}`);
+    assert(/^pixora-clip-[A-Za-z0-9_-]+\.mp4$/.test(dl.suggestedFilename()), `filename ${dl.suggestedFilename()}`);
     const file = path.join(ART, dl.suggestedFilename());
     await dl.saveAs(file);
     const p = ffprobe(file);

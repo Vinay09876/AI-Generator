@@ -1,6 +1,6 @@
 export const SITE = {
-  name: "YourAI",
-  title: "YourAI — AI Image, Video & Clip Studio",
+  name: "Pixora",
+  title: "Pixora — AI Image, Video & Clip Studio",
   description:
     "Generate images, create videos and clip long-form content into shareable highlights — all from one AI-powered workspace.",
 } as const;

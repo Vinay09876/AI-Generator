@@ -71,7 +71,7 @@ import {
 import { reconcileStorageObject } from "./restore-storage.mjs";
 
 /**
- * Hardened Test Suite: YourAI Disaster Recovery & Operational Tooling (Stage 7 Batch 2 Hardened)
+ * Hardened Test Suite: Pixora Disaster Recovery & Operational Tooling (Stage 7 Batch 2 Hardened)
  *
  * Fully Offline: Uses disposable fixtures only. Does NOT connect to production database or storage.
  */
@@ -102,7 +102,7 @@ async function main() {
   console.log("# Disaster Recovery — Cryptographic Primitives & Two-Tier Key Hierarchy");
 
   await test("encryptBuffer / decryptBuffer round-trip with text payload (V2 format)", () => {
-    const original = Buffer.from("Hello YourAI Disaster Recovery System V2! 🚀", "utf8");
+    const original = Buffer.from("Hello Pixora Disaster Recovery System V2! 🚀", "utf8");
     const encrypted = encryptBuffer(original, strongPassphrase);
 
     assert.notDeepEqual(encrypted, original);
@@ -338,7 +338,7 @@ async function main() {
 
   await test("DR-03A: verifyCachedObjectStreaming succeeds on valid cached object", async () => {
     const filePath = join(TEST_DIR, "cache-valid.enc");
-    const plaintext = Buffer.from("Valid high-resolution webp image data for YourAI user 123", "utf8");
+    const plaintext = Buffer.from("Valid high-resolution webp image data for Pixora user 123", "utf8");
     const masterKey = deriveMasterKey(strongPassphrase, Buffer.from("salt-m"), 100_000);
     const objectSubKey = deriveSubKey(masterKey, "storage:users/u1/images/valid.webp");
 

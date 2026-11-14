@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { ImageIcon, Video, Scissors, Sparkles } from "lucide-react";
 import { ROUTES } from "@/lib/constants";
 import { cn } from "@/lib/utils";
+import { LinkPendingIndicator } from "./link-pending-indicator";
 
 export interface StudioToolItem {
   id: "image" | "video" | "clipper";
@@ -94,6 +95,7 @@ export function StudioNav({ className }: { className?: string }) {
                   </div>
                 </div>
 
+                <LinkPendingIndicator className="shrink-0" />
                 <span
                   className={cn(
                     "shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-semibold tabular-nums",

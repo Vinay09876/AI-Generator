@@ -78,7 +78,7 @@ class MockTransactionalDatabase {
     // Seed test user and initial wallet
     this.users.set("usr_test_100", {
       id: "usr_test_100",
-      email: "billing-test@yourai.test",
+      email: "billing-test@pixora.test",
       name: "Billing Test User",
       isDeleted: false,
     });

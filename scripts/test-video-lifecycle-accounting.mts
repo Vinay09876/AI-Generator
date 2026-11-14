@@ -688,9 +688,9 @@ function createMockDb(): { db: any; state: MockDbState } {
 // Setup test users & wallets
 const { db: mockPrisma, state: mockState } = createMockDb();
 
-const qaUser = { id: "cuser_qa_100", email: "qa@yourai.test", emailVerified: true };
-const promoUser = { id: "cuser_promo_200", email: "promo@yourai.test", emailVerified: true };
-const poorUser = { id: "cuser_poor_300", email: "poor@yourai.test", emailVerified: true };
+const qaUser = { id: "cuser_qa_100", email: "qa@pixora.test", emailVerified: true };
+const promoUser = { id: "cuser_promo_200", email: "promo@pixora.test", emailVerified: true };
+const poorUser = { id: "cuser_poor_300", email: "poor@pixora.test", emailVerified: true };
 
 mockState.users.set(qaUser.id, qaUser);
 mockState.users.set(promoUser.id, promoUser);
@@ -1047,7 +1047,7 @@ ok(
 section("Section 6: Concurrency & PostgreSQL Integration Test Suite Simulation");
 
 // 1. Concurrent duplicate idempotency requests
-const concUser = { id: "cuser_conc_888", email: "conc@yourai.test", emailVerified: true };
+const concUser = { id: "cuser_conc_888", email: "conc@pixora.test", emailVerified: true };
 mockState.users.set(concUser.id, concUser);
 mockState.wallets.set("w_conc", { id: "w_conc", userId: concUser.id, balance: 100 });
 
@@ -1109,7 +1109,7 @@ ok(
 );
 
 // Concurrent generation requests with active job block
-const activeUser = { id: "cuser_active_002", email: "active@yourai.test", emailVerified: true };
+const activeUser = { id: "cuser_active_002", email: "active@pixora.test", emailVerified: true };
 mockState.users.set(activeUser.id, activeUser);
 mockState.wallets.set("w_active", { id: "w_active", userId: activeUser.id, balance: 100 });
 

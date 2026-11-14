@@ -6,7 +6,7 @@ import { DEFAULT_DAILY_USER_VIDEO_LIMIT } from "@/features/video/config";
 
 export const metadata: Metadata = {
   title: "Acceptable Use Policy",
-  description: "Rules, safety standards, and prohibited content policies governing YourAI.",
+  description: "Rules, safety standards, and prohibited content policies governing Pixora.",
 };
 
 export default function AcceptableUsePolicyPage() {

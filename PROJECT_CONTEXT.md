@@ -1,4 +1,4 @@
-# YourAI — Project Context
+# Pixora — Project Context
 
 > Source of truth for product direction, approved decisions and current progress.
 > Read this before starting any work. Update the **Status** section when a stage completes.
@@ -6,7 +6,7 @@
 
 ## 1. Product
 
-**YourAI** is an AI creative SaaS, starting in India and expanding globally later. Three core tools:
+**Pixora** is an AI creative SaaS, starting in India and expanding globally later. Three core tools:
 
 1. **AI Image Generator** — text → image, quality options, history, credits. *(completed in Stage 7)*
 2. **AI Video Generator** — text → video, 720p 5s, aspect ratios (16:9, 9:16, 1:1), Wan 2.1 via Fal.ai / Mock adapter, credits, history. *(building now — Stage 8)*
@@ -192,7 +192,7 @@ Lifecycle: `createImageJob` (PENDING) → `markJobStarted` (PROCESSING, commit *
 - A pending request (key, prompt, quality, startedAt, jobId?) is stored per user in localStorage *before* the POST; it is cleared only for its own job's confirmed terminal state, a definitive rejection, or expiry.
 - Page-load recovery (once, Strict-Mode safe): server active job → poll; stored job id → poll; stored request without job id < 10 min → replay with the original key; older → removed with an "expired" notice (prompt restorable). A stored request that is not the server's active job is **held** (kept, explained; Resume / Discard are explicit user actions; new submits are blocked meanwhile).
 - Polling: Retry-After (1–30 s), backoff 3/6/12/30 s on failures, paused while the tab is hidden, stops after 7 min → "stalled" with Check again (GET only when a job id is known). "Check now" for uncertain outcomes.
-- `completed` requires a confirmed asset. Images are shown only via `/api/assets/{id}`; signed storage URLs and keys never enter client state. Download = blob fetch of `/api/assets/{id}` saved as `yourai-<jobId>.webp`, falling back to opening the image.
+- `completed` requires a confirmed asset. Images are shown only via `/api/assets/{id}`; signed storage URLs and keys never enter client state. Download = blob fetch of `/api/assets/{id}` saved as `pixora-<jobId>.webp`, falling back to opening the image.
 - Recent images gallery: the 8 newest completed images (`getRecentImageJobs`, owner-scoped). Selecting one is pure view state (never touches the controller or the stored request).
 - Layout: centred single column (max 672 px) below 1280 px; composer + preview side by side from `xl` (1280 px). Gallery 2 / 3 / 4 columns.
 - Accessibility: native radio group for quality, labelled prompt with threshold announcements, one polite live region for generation states, `role=alert` for rejections, loading buttons use `aria-disabled` (focus is kept), prompt is read-only (not disabled) while busy, ≥ 44 px targets, reduced-motion respected.
@@ -204,7 +204,7 @@ Lifecycle: `createImageJob` (PENDING) → `markJobStarted` (PROCESSING, commit *
 - Neurons: actual usage from the `cf-ai-neurons` header = 172.80 (17,280 centi), identical to the reservation; reservation CONSUMED and settled once; daily budget consumed 17,280, reserved 0.
 - Storage: exactly one object at `users/{userId}/images/{jobId}/{assetId}.webp` in the private bucket — valid WebP, 1024 × 1024, 31,318 bytes (row size matches), `cache-control: max-age=3600`. Asset `6b9df473-6561-4eff-94a6-0247250d815e`.
 - Credits: one GENERATION_DEBIT −1 (`job-debit:<job>`), wallet 100 → 99, ledger sum = wallet, no refund. No duplicate job / asset / debit / reservation.
-- Image delivery: `/api/assets/{id}` → 302 to a signed URL. Verified in the browser by the user: the image rendered in the preview and appeared in Recent images; Download saved the file with the expected name `yourai-<jobId>.webp` (blob path; the server log shows exactly one further `/api/assets` request and no new-tab fallback); DevTools console had no errors.
+- Image delivery: `/api/assets/{id}` → 302 to a signed URL. Verified in the browser by the user: the image rendered in the preview and appeared in Recent images; Download saved the file with the expected name `pixora-<jobId>.webp` (blob path; the server log shows exactly one further `/api/assets` request and no new-tab fallback); DevTools console had no errors.
 - No server errors. Note: Next.js dev warns about `scroll-behavior: smooth` on `<html>` (suggests `data-scroll-behavior="smooth"`); cosmetic, pre-existing.
 - **Unverified:** reload during a real in-flight generation (the job completed inside the synchronous request, so no reload window existed).
 
@@ -352,7 +352,7 @@ Provides atomic synchronization between the PostgreSQL database and private Supa
   - *Storage newer than DB:* Storage contains unreferenced image files. Completely harmless; assets cannot be queried or leaked because database ownership lookup gates all access.
   - *DB newer than Storage:* Database contains asset rows referencing storage keys that do not exist (causes 404 on viewing/downloading). Coordinated backup sets eliminate this skew by capturing DB first and extracting exact keys.
 - **Concurrent Generation & Deletion:**
-  - In YourAI, images are generated immutably.
+  - In Pixora, images are generated immutably.
   - Soft deletion in database ensures storage objects remain available during active backup windows.
   - True snapshot isolation across two independent systems (PostgreSQL and Supabase Storage) requires freezing uploads or a retention period before hard deletion.
 
@@ -433,7 +433,7 @@ All policies strictly reflect actual architecture, verified pricing, actual data
   - Zero tolerance for Child Sexual Abuse Material (CSAM/CSAE) with immediate permanent account termination. Carefully qualified language reserving the right to refer violations to competent authorities where legally required or appropriate, subject to legal review. Discloses that no automated direct reporting API integration is currently operational.
   - Unconditional prohibition of Non-Consensual Intimate Imagery (NCII), unauthorized deepfakes of real individuals, hate speech, harassment, violence, terrorism, fraud, phishing, and malware.
   - Prohibits system abuse: bypassing rate limits, exploiting concurrency or daily quotas, payload abuse beyond the 2048-character prompt maximum (`PROMPT_MAX_LENGTH`).
-  - **Truthful Enforcement Transparency (Zero False Claims):** Truthfully discloses that the current inference pipeline does NOT incorporate automated pre-inference safety filters or computer-vision moderation classifiers, and that the software does NOT currently contain internal administrative moderation dashboards, abuse queues, or automated suspension tooling. Technical controls implemented in software are strictly: (1) server-side schema validation (character limits, UTF-8, malformed JSON rejection), (2) process-local burst rate limiters, and (3) PostgreSQL transactional quotas. The policy contractually reserves YourAI's legal right to restrict, suspend, or terminate accounts, while explicitly noting that operational abuse-intake and administrative review workflows are pre-launch operational items.
+  - **Truthful Enforcement Transparency (Zero False Claims):** Truthfully discloses that the current inference pipeline does NOT incorporate automated pre-inference safety filters or computer-vision moderation classifiers, and that the software does NOT currently contain internal administrative moderation dashboards, abuse queues, or automated suspension tooling. Technical controls implemented in software are strictly: (1) server-side schema validation (character limits, UTF-8, malformed JSON rejection), (2) process-local burst rate limiters, and (3) PostgreSQL transactional quotas. The policy contractually reserves Pixora's legal right to restrict, suspend, or terminate accounts, while explicitly noting that operational abuse-intake and administrative review workflows are pre-launch operational items.
 
 ### 2. UX Discoverability & Navigation Touchpoints
 - **Legal Navigation Routes (`src/lib/constants.ts`):** Defined `LEGAL_ROUTES` (`terms`, `privacy`, `acceptableUse`) and linked into `ROUTES`.
@@ -632,7 +632,7 @@ All policies strictly reflect actual architecture, verified pricing, actual data
     - Supabase live integration limitation: Offline sandbox mode prevents live HTTP uploads to remote Supabase Storage. Verified through SDK source inspection and simulated streaming upload tests; isolated live integration testing remains a pre-release operational item.
 - **Batch 3: Fal.ai Provider Adapter, Webhook Fast-ACK & Asynchronous Orchestration** (✅ Complete & Verified — 119 tests passing)
   - Official Provider Research & Specification Verification (Nov 11, 2026):
-    - Selected Model: `fal-ai/wan/v2.1/t2v-720p` (Alibaba Tongyi Wan 2.1 text-to-video, Apache 2.0 open weights, commercial use permitted under Fal.ai platform terms, verified official pricing $0.10/second for 720p -> $0.50 per 5-second video; YourAI charges 10 platform credits via configurable `getVideoCreditCost()`).
+    - Selected Model: `fal-ai/wan/v2.1/t2v-720p` (Alibaba Tongyi Wan 2.1 text-to-video, Apache 2.0 open weights, commercial use permitted under Fal.ai platform terms, verified official pricing $0.10/second for 720p -> $0.50 per 5-second video; Pixora charges 10 platform credits via configurable `getVideoCreditCost()`).
     - Queue Submission API: `POST https://queue.fal.run/fal-ai/wan/v2.1/t2v-720p?fal_webhook={encodedWebhookUrl}`.
     - Verified Request Schema: `prompt` (string, required), `aspect_ratio` ("16:9", "9:16", "1:1"), `num_frames: 81`, `frames_per_second: 16`, `resolution: "720p"`, `enable_safety_checker: true`.
     - Verified Duration Mapping: 81 frames at 16 fps = ~5.06s (~5s).
@@ -654,7 +654,7 @@ All policies strictly reflect actual architecture, verified pricing, actual data
   - Ambiguous Provider Submission Handling (`src/features/video/lifecycle.ts` & `src/features/video/providers/fal-provider.ts`):
     - Explicit classification: Pre-transmission rejections (`ENOTFOUND`, invalid schema, pre-aborted signal) classified as `not_run` (safe to refund immediately). In-flight network drops, timeouts, 5xx, or malformed 200 classified as `unknown`.
     - Non-premature refund: `recordVideoJobSubmissionAmbiguous` transitions job `PENDING -> PROCESSING`, records `submission = { state: "ambiguous", error, attemptedAt }` in settings, and preserves debited credits.
-    - Webhook-Driven Recovery: Submission embeds `?jobId={jobId}` into `fal_webhook` query parameter (`https://yourai.com/api/webhooks/video/fal?jobId=...`). When the webhook arrives, it recovers the job via `event.jobId`, backfills `providerJobId`, and completes asset ingestion.
+    - Webhook-Driven Recovery: Submission embeds `?jobId={jobId}` into `fal_webhook` query parameter (`https://pixora.com/api/webhooks/video/fal?jobId=...`). When the webhook arrives, it recovers the job via `event.jobId`, backfills `providerJobId`, and completes asset ingestion.
     - 15-Minute Timeout Sweep: If no webhook arrives after 15 minutes, `reconcileStaleVideoJobs()` settles the job to `FAILED` and refunds credits.
     - Residual Ambiguity: Fal.ai does not support idempotency keys on queue submissions; automated re-submissions are avoided to prevent duplicate provider charges.
   - Durable Worker Execution & Recovery Architecture (`src/features/video/webhooks/durable-events.ts`, `process-event.ts`, `src/app/api/cron/video-webhooks/route.ts`):
@@ -685,7 +685,7 @@ All policies strictly reflect actual architecture, verified pricing, actual data
     - Definite rejection handling: Cleanly maps `not_run` provider rejections to HTTP 502 `UPSTREAM_REJECTED` and refunds debited credits atomically.
     - Ambiguous outcome handling: Maps network drops or in-flight 5xx to HTTP 202 Accepted, updates submission state to `ambiguous`, and preserves debited credits. ReconcileStaleVideoJobs does NOT automatically refund ambiguous submissions after 15 minutes; instead, transitions them to an explicit operationally reviewable unresolved state (`settings.submission.unresolved = true`, `reviewStatus: "pending_operator_review"`) while preserving `PROCESSING` status and debits. Late valid webhooks safely complete unresolved jobs, while operator resolution paths (`resolveAmbiguousJobAsFailed`, `resolveAmbiguousJobAsCompleted`) provide manual resolution with full audit trail and enforce post-refund late completion rejection.
   - Durable Submission Recovery (`src/features/video/durable-submission.ts`):
-    - Eliminates blind duplicate requests: Because Fal.ai's `queue.fal.run` API lacks native idempotency key support, YourAI prevents double submissions on server restart by distinguishing unattempted intent (`state: "intent"`) from in-flight submissions.
+    - Eliminates blind duplicate requests: Because Fal.ai's `queue.fal.run` API lacks native idempotency key support, Pixora prevents double submissions on server restart by distinguishing unattempted intent (`state: "intent"`) from in-flight submissions.
     - Atomic Lease Claiming: `claimVideoSubmissionLease` uses atomic PostgreSQL conditional updates to claim a 60s submission lease (`state: "dispatching"`).
     - Stale Intent Recovery: `reconcileStaleSubmissionIntent` re-dispatches unattempted jobs whose leases expired, while safely transitioning in-flight unconfirmed dispatches to `state: "ambiguous"` to await webhook correlation via `?jobId={jobId}` or operational review (never auto-refunded).
   - `GET /api/generations/video/[jobId]` (Lightweight Owner-Scoped Polling Endpoint):
@@ -718,7 +718,7 @@ All policies strictly reflect actual architecture, verified pricing, actual data
   - Cryptographically Bound Webhook Correlation Security (`src/features/video/webhooks/correlation.ts`):
     - Delayed Correlation Defense: Fal.ai Ed25519 webhook signatures only cover `${requestId}\n${userId}\n${timestamp}\n${bodyHash}`; query parameters such as `?jobId=` are NOT signed by the provider. Without cryptographic correlation binding, an attacker holding any valid signed Fal webhook payload could append arbitrary `jobId` parameters to associate webhooks with unowned or ambiguous jobs.
     - Token Structure: Bound to `jobId`, `provider` ("fal-ai"), and unique `submissionAttempt` UUID. Format: `${base64url(submissionAttempt)}.${hex(nonce16)}.${hex(hmacSha256)}` signed with `WEBHOOK_CORRELATION_SECRET` or `AUTH_SECRET`. 16-byte random nonce guarantees unpredictability.
-    - URL Construction: `fal-provider.ts` constructs `https://yourai.com/api/webhooks/video/fal?jobId={jobId}&token={correlationToken}`.
+    - URL Construction: `fal-provider.ts` constructs `https://pixora.com/api/webhooks/video/fal?jobId={jobId}&token={correlationToken}`.
     - HTTP Boundary Enforcement (`route.ts`): If `jobId` query param is present, `token` query param is MANDATORY. Missing, malformed, cross-job substituted, or tampered tokens are rejected with HTTP 400 `Invalid correlation`. A valid Fal Ed25519 signature ALONE cannot authorize an attacker-controlled or modified `jobId`.
     - Asynchronous Worker Enforcement (`process-event.ts`): Priority B correlation verifies that payload `_correlationToken` matches `candidateJob.settings.submission.correlationToken`, `candidateJob.settings.submission.token` (submission attempt), and `candidateJob.id` using constant-time comparison. Rejected correlations leave the job completely untouched.
     - Replay Defense: Redeliveries on terminal jobs (`status !== 'PROCESSING'`) immediately settle to `PROCESSED` with `JOB_ALREADY_TERMINAL` without duplicate credit debits, refunds, or asset creation.
@@ -1247,7 +1247,7 @@ Owner decisions (all approved): (1) `CLIPPER_SUBMISSIONS_ENABLED` operator switc
 **Download route** (`GET /api/generations/clip/[jobId]/clips/[assetId]/download`)
 - Requires a session and a rate-limit check, and validates both ids.
 - `getClipAssetForDownload`: the asset must belong to the user and to this job, and the job must be a COMPLETED VIDEO_CLIP job; the key-ownership check is applied again.
-- Answers 302 to a **60 s** signed link with `download=yourai-clip-<id>.mp4` (`Cache-Control: no-store`, `Referrer-Policy: no-referrer`).
+- Answers 302 to a **60 s** signed link with `download=pixora-clip-<id>.mp4` (`Cache-Control: no-store`, `Referrer-Policy: no-referrer`).
 - `ClipperStorage.createSignedUrl` gained an optional `{ download }`, with the origin pinning kept.
 
 **Fix A (client controller)**
@@ -1376,7 +1376,7 @@ Owner decisions (all approved): (1) `CLIPPER_SUBMISSIONS_ENABLED` operator switc
 
 - **Vulnerability Identified in Preliminary Packaging**:
   - In the preliminary proposal, offering 250 credits for ₹299 meant a user could generate 25 videos (25 * 10 credits = 250 credits).
-  - 25 Fal.ai videos would cost YourAI: 25 * $0.50 = $12.50 = **₹1,062.50**, resulting in a severe loss of -₹763.50 (-255% gross margin) on video-heavy usage.
+  - 25 Fal.ai videos would cost Pixora: 25 * $0.50 = $12.50 = **₹1,062.50**, resulting in a severe loss of -₹763.50 (-255% gross margin) on video-heavy usage.
   - **Remediation & Invariants**:
     - Do NOT finalize credit-to-rupee conversion, retail packages, or public pricing in architecture.
     - Batch 1 will implement a configurable cost/margin calculator (`src/features/billing/calculator.ts`) that takes dynamic parameters (provider rates, FX rates, gateway fees, tax rates, refund allowances, safety buffers) rather than hardcoded assumptions.

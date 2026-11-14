@@ -10,7 +10,7 @@ import { NAV_LINKS, ROUTES } from "@/lib/constants";
 import { EASE_OUT } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 
-export function Navbar() {
+export function Navbar({ signedIn = false }: { signedIn?: boolean }) {
   const { scrollY } = useScroll();
   const [scrolled, setScrolled] = useState(false);
   const [hovered, setHovered] = useState<string | null>(null);
@@ -76,12 +76,20 @@ export function Navbar() {
         </nav>
 
         <div className="hidden items-center gap-2 md:flex">
-          <ButtonLink href={ROUTES.login} variant="ghost" size="sm">
-            Log in
-          </ButtonLink>
-          <ButtonLink href={ROUTES.register} size="sm">
-            Get started
-          </ButtonLink>
+          {signedIn ? (
+            <ButtonLink href={ROUTES.dashboard} size="sm">
+              Dashboard
+            </ButtonLink>
+          ) : (
+            <>
+              <ButtonLink href={ROUTES.login} variant="ghost" size="sm">
+                Log in
+              </ButtonLink>
+              <ButtonLink href={ROUTES.register} size="sm">
+                Get started
+              </ButtonLink>
+            </>
+          )}
         </div>
 
         <button
@@ -127,14 +135,22 @@ export function Navbar() {
                 </li>
               ))}
             </ul>
-            <div className="mt-2 grid grid-cols-2 gap-2 border-t border-white/5 pt-3">
-              <ButtonLink href={ROUTES.login} variant="secondary" size="md">
-                Log in
-              </ButtonLink>
-              <ButtonLink href={ROUTES.register} size="md">
-                Get started
-              </ButtonLink>
-            </div>
+            {signedIn ? (
+              <div className="mt-2 grid border-t border-white/5 pt-3">
+                <ButtonLink href={ROUTES.dashboard} size="md">
+                  Dashboard
+                </ButtonLink>
+              </div>
+            ) : (
+              <div className="mt-2 grid grid-cols-2 gap-2 border-t border-white/5 pt-3">
+                <ButtonLink href={ROUTES.login} variant="secondary" size="md">
+                  Log in
+                </ButtonLink>
+                <ButtonLink href={ROUTES.register} size="md">
+                  Get started
+                </ButtonLink>
+              </div>
+            )}
           </motion.div>
         )}
       </AnimatePresence>

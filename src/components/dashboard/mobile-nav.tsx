@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { AnimatePresence, motion } from "motion/react";
 import { Menu, X } from "lucide-react";
 import { Logo } from "@/components/ui/logo";
+import { ROUTES } from "@/lib/constants";
 import { EASE_OUT } from "@/lib/motion";
 import { CreditPill } from "./credit-pill";
 import { LogoutButton } from "./logout-button";
@@ -85,7 +86,7 @@ export function MobileNav({ user, balance }: { user: UserSummaryData; balance: n
   return (
     <>
       <header className="sticky top-0 z-40 flex h-16 items-center justify-between gap-3 border-b border-white/[0.06] bg-background/75 px-4 backdrop-blur-xl sm:px-6 lg:hidden">
-        <Logo />
+        <Logo href={ROUTES.dashboard} />
         <div className="flex items-center gap-2">
           <CreditPill balance={balance} />
           <button
@@ -128,7 +129,7 @@ export function MobileNav({ user, balance }: { user: UserSummaryData; balance: n
               transition={{ duration: 0.35, ease: EASE_OUT }}
             >
               <div className="flex items-center justify-between px-2">
-                <Logo />
+                <Logo href={ROUTES.dashboard} />
                 <button
                   type="button"
                   onClick={close}

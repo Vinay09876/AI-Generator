@@ -12,7 +12,7 @@ const DEV_FALLBACK_ORIGINS = ["http://localhost:3000", "http://127.0.0.1:3000"];
 /**
  * The application's own origin(s), from configuration only — never from the request's
  * Host or X-Forwarded-* headers, which a client or misconfigured proxy can set.
- *  - APP_ORIGIN: comma-separated list, e.g. "https://yourai.example,https://www.yourai.example"
+ *  - APP_ORIGIN: comma-separated list, e.g. "https://pixora.example,https://www.pixora.example"
  *  - AUTH_URL (if set) is also trusted, since Auth.js already treats it as canonical.
  * Outside production, localhost:3000 is allowed when nothing is configured.
  * In production with nothing configured the list is empty, so every check fails closed.

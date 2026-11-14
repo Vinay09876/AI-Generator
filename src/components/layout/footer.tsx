@@ -38,7 +38,14 @@ const COLUMNS = [
   },
 ] as const;
 
-export function Footer() {
+/** Signed-in visitors only see the Dashboard link: "Log in" would just bounce them to it. */
+const SIGNED_IN_ACCOUNT_LINKS = [{ label: "Dashboard", href: ROUTES.dashboard }] as const;
+
+export function Footer({ signedIn = false }: { signedIn?: boolean }) {
+  const columns = COLUMNS.map((col) =>
+    col.title === "Account" && signedIn ? { ...col, links: SIGNED_IN_ACCOUNT_LINKS } : col,
+  );
+
   return (
     <footer className="relative border-t border-white/[0.06]">
       <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-violet/50 to-transparent" />
@@ -47,7 +54,7 @@ export function Footer() {
           <Logo />
           <p className="mt-4 text-sm leading-relaxed text-muted">{SITE.description}</p>
         </div>
-        {COLUMNS.map((col) => (
+        {columns.map((col) => (
           <div key={col.title}>
             <h3 className="text-sm font-medium text-foreground">{col.title}</h3>
             <ul className="mt-4 space-y-3">

@@ -129,7 +129,7 @@ export function VideoPreviewStage({
               poster={activeDisplayItem.asset.thumbnailUrl}
               aspectRatio={effectiveAspectRatio}
               autoPlay={!isHistoryView}
-              filename={`yourai-video-${activeDisplayItem.job.id.slice(0, 8)}.mp4`}
+              filename={`pixora-video-${activeDisplayItem.job.id.slice(0, 8)}.mp4`}
             />
 
             {/* Video Details & Action Toolbar */}
@@ -188,7 +188,7 @@ export function VideoPreviewStage({
                   {/* Direct Download Link */}
                   <a
                     href={activeDisplayItem.asset.videoUrl}
-                    download={`yourai-video-${activeDisplayItem.job.id.slice(0, 8)}.mp4`}
+                    download={`pixora-video-${activeDisplayItem.job.id.slice(0, 8)}.mp4`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="inline-flex h-9 items-center justify-center gap-1.5 rounded-full bg-white px-4 text-xs font-semibold text-zinc-950 shadow-md transition-all hover:bg-white/90 active:scale-95"

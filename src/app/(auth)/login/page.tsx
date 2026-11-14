@@ -16,8 +16,8 @@ export default async function LoginPage({
   return (
     <AuthCard
       title="Welcome back"
-      description="Log in to your YourAI workspace."
-      footer={{ text: "New to YourAI?", linkLabel: "Create an account", href: ROUTES.register }}
+      description="Log in to your Pixora workspace."
+      footer={{ text: "New to Pixora?", linkLabel: "Create an account", href: ROUTES.register }}
     >
       <LoginForm
         callbackUrl={callbackUrl ? safeRedirectPath(callbackUrl) : undefined}

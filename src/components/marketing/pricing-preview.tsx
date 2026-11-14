@@ -17,7 +17,7 @@ type Plan = {
 const PLANS: Plan[] = [
   {
     name: "Starter",
-    tagline: "For trying YourAI and personal projects.",
+    tagline: "For trying Pixora and personal projects.",
     features: ["Starter credit allowance", "AI Image Generator", "Standard-resolution exports", "Generation history"],
     cta: "Get started",
   },

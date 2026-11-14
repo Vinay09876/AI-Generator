@@ -249,7 +249,7 @@ console.log("\n# Section 2: FalVideoProvider Submission & Status Polling");
   const provider = new FalVideoProvider({
     apiKey: "fal_secret_token_abc",
     model: DEFAULT_VIDEO_MODEL,
-    webhookUrl: "https://yourai.test/api/webhooks/video/fal",
+    webhookUrl: "https://pixora.test/api/webhooks/video/fal",
     fetchImpl: mockSubmitFetch,
   });
 
@@ -642,7 +642,7 @@ console.log("\n# Section 3: Durable Webhook Ingestion & Fast-ACK Route Handler")
   });
 
   const createValidReq = () =>
-    new Request("https://yourai.test/api/webhooks/video/fal", {
+    new Request("https://pixora.test/api/webhooks/video/fal", {
       method: "POST",
       headers: {
         "content-type": "application/json",
@@ -671,7 +671,7 @@ console.log("\n# Section 3: Durable Webhook Ingestion & Fast-ACK Route Handler")
     ok(routeJson.requestId === "fal-event-req-001", "Fast ACK returns requestId");
 
     // Invalid Signature: Rejection with HTTP 401 (before parsing or correlation)
-    const invalidReq = new Request("https://yourai.test/api/webhooks/video/fal", {
+    const invalidReq = new Request("https://pixora.test/api/webhooks/video/fal", {
       method: "POST",
       headers: {
         "content-type": "application/json",
@@ -700,7 +700,7 @@ console.log("\n# Section 3: Durable Webhook Ingestion & Fast-ACK Route Handler")
       rawBody: mismatchBody,
     });
 
-    const mismatchReq = new Request("https://yourai.test/api/webhooks/video/fal", {
+    const mismatchReq = new Request("https://pixora.test/api/webhooks/video/fal", {
       method: "POST",
       headers: {
         "content-type": "application/json",
@@ -730,7 +730,7 @@ console.log("\n# Section 3: Durable Webhook Ingestion & Fast-ACK Route Handler")
       rawBody: missingIdBody,
     });
 
-    const missingIdReq = new Request("https://yourai.test/api/webhooks/video/fal", {
+    const missingIdReq = new Request("https://pixora.test/api/webhooks/video/fal", {
       method: "POST",
       headers: {
         "content-type": "application/json",
@@ -761,7 +761,7 @@ console.log("\n# Section 3: Durable Webhook Ingestion & Fast-ACK Route Handler")
     });
 
     // 3a. Negative Test: Missing correlation token when jobId is provided
-    const missingTokenReq = new Request("https://yourai.test/api/webhooks/video/fal?jobId=vjob-correlated-123", {
+    const missingTokenReq = new Request("https://pixora.test/api/webhooks/video/fal?jobId=vjob-correlated-123", {
       method: "POST",
       headers: {
         "content-type": "application/json",
@@ -778,7 +778,7 @@ console.log("\n# Section 3: Durable Webhook Ingestion & Fast-ACK Route Handler")
     ok(missingTokenJson.error === "Invalid correlation", "identifies invalid correlation error");
 
     // 3b. Negative Test: Invalid / malformed correlation token
-    const malformedTokenReq = new Request("https://yourai.test/api/webhooks/video/fal?jobId=vjob-correlated-123&token=malformed-xyz-123", {
+    const malformedTokenReq = new Request("https://pixora.test/api/webhooks/video/fal?jobId=vjob-correlated-123&token=malformed-xyz-123", {
       method: "POST",
       headers: {
         "content-type": "application/json",
@@ -799,7 +799,7 @@ console.log("\n# Section 3: Durable Webhook Ingestion & Fast-ACK Route Handler")
       submissionAttempt: "attempt-001",
     });
     const substitutedJobReq = new Request(
-      `https://yourai.test/api/webhooks/video/fal?jobId=vjob-correlated-123&token=${otherJobToken}`,
+      `https://pixora.test/api/webhooks/video/fal?jobId=vjob-correlated-123&token=${otherJobToken}`,
       {
         method: "POST",
         headers: {
@@ -822,7 +822,7 @@ console.log("\n# Section 3: Durable Webhook Ingestion & Fast-ACK Route Handler")
       submissionAttempt: "attempt-001",
     });
     const substitutedProvReq = new Request(
-      `https://yourai.test/api/webhooks/video/fal?jobId=vjob-correlated-123&token=${otherProviderToken}`,
+      `https://pixora.test/api/webhooks/video/fal?jobId=vjob-correlated-123&token=${otherProviderToken}`,
       {
         method: "POST",
         headers: {
@@ -846,7 +846,7 @@ console.log("\n# Section 3: Durable Webhook Ingestion & Fast-ACK Route Handler")
       submissionAttempt: "attempt-001",
     });
     const tamperedJobIdReq = new Request(
-      `https://yourai.test/api/webhooks/video/fal?jobId=vjob-tampered-victim-bbb&token=${validTokenForJobA}`,
+      `https://pixora.test/api/webhooks/video/fal?jobId=vjob-tampered-victim-bbb&token=${validTokenForJobA}`,
       {
         method: "POST",
         headers: {
@@ -872,7 +872,7 @@ console.log("\n# Section 3: Durable Webhook Ingestion & Fast-ACK Route Handler")
       submissionAttempt: "attempt-valid-001",
     });
     const validQueryJobReq = new Request(
-      `https://yourai.test/api/webhooks/video/fal?jobId=vjob-correlated-123&token=${validCorrelationToken}`,
+      `https://pixora.test/api/webhooks/video/fal?jobId=vjob-correlated-123&token=${validCorrelationToken}`,
       {
         method: "POST",
         headers: {
@@ -2024,7 +2024,7 @@ console.log("\n# Section 5: Ambiguous Submissions, Bounded Backoff, Batch Worker
   ok(batchRes.processed >= 1, "processPendingWebhookBatch processes eligible events");
 
   // 9. Cron Reconciliation Route Handler (/api/cron/video-webhooks)
-  const cronReq = new Request("https://yourai.test/api/cron/video-webhooks", {
+  const cronReq = new Request("https://pixora.test/api/cron/video-webhooks", {
     method: "GET",
   });
   const cronRes = await cronRouteHandler(cronReq, { db: db as any, storage: storage as any });

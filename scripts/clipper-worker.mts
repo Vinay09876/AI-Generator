@@ -1,5 +1,5 @@
 /**
- * YourAI Video Clipper worker (Stage 9 Batch 5).
+ * Pixora Video Clipper worker (Stage 9 Batch 5).
  *
  *   Development:  npm run clipper:worker -- [--once] [--idle-ms=5000]          (tsx, dev dependency)
  *   Production:   node --conditions=react-server dist/clipper-worker.mjs [...]  (bundled by
@@ -77,7 +77,7 @@ for (const sig of ["SIGINT", "SIGTERM"] as const) {
   });
 }
 
-const scratchDir = process.env.CLIPPER_SCRATCH_DIR?.trim() || path.join(os.tmpdir(), "yourai-clipper");
+const scratchDir = process.env.CLIPPER_SCRATCH_DIR?.trim() || path.join(os.tmpdir(), "pixora-clipper");
 console.log("[clipper-worker] started", { once, idleMs, scratchDir });
 
 try {

@@ -398,7 +398,7 @@ section("Section 3: Job State Pre-Execution Validation");
 
 {
   const { client, seedUser, seedJob } = createMockCliDb();
-  const user = { id: "user_alpha_123", email: "alpha@yourai.test" };
+  const user = { id: "user_alpha_123", email: "alpha@pixora.test" };
   seedUser(user, 100);
 
   // Missing ID check
@@ -570,7 +570,7 @@ section("Section 4: Execution Safeguards & Validation Invariants");
 
 {
   const { client, seedUser, seedJob } = createMockCliDb();
-  const user = { id: "user_guard_1", email: "guard@yourai.test" };
+  const user = { id: "user_guard_1", email: "guard@pixora.test" };
   seedUser(user, 100);
 
   seedJob(
@@ -929,7 +929,7 @@ section("Section 5: Dry-Run Mode vs Confirmed Execution");
 
 {
   const { client, state, seedUser, seedJob } = createMockCliDb();
-  const user = { id: "user_dry_200", email: "dryrun@yourai.test" };
+  const user = { id: "user_dry_200", email: "dryrun@pixora.test" };
   seedUser(user, 60); // balance: 60 (initial was 100, 40 debited)
 
   seedJob(
@@ -1058,7 +1058,7 @@ section("Section 6: Confirmed Resolution as COMPLETED");
 
 {
   const { client, state, seedUser, seedJob } = createMockCliDb();
-  const user = { id: "user_comp_300", email: "completed@yourai.test" };
+  const user = { id: "user_comp_300", email: "completed@pixora.test" };
   seedUser(user, 60);
 
   seedJob(
@@ -1155,7 +1155,7 @@ section("Section 7: End-to-End runCli Execution Flow");
 
 {
   const { client, seedUser, seedJob } = createMockCliDb();
-  const user = { id: "user_e2e_400", email: "e2e@yourai.test" };
+  const user = { id: "user_e2e_400", email: "e2e@pixora.test" };
   seedUser(user, 100);
 
   seedJob(

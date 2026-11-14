@@ -96,7 +96,7 @@ function webhookDb() {
 
 const signedWebhook = (body: object, secret: string, header = "x-mock-signature") => {
   const raw = JSON.stringify(body);
-  return new Request("https://yourai.example/api/webhooks/payments/razorpay", {
+  return new Request("https://pixora.example/api/webhooks/payments/razorpay", {
     method: "POST",
     headers: { "content-type": "application/json", [header]: createHmac("sha256", secret).update(raw).digest("hex") },
     body: raw,
@@ -116,8 +116,8 @@ await test("development/test: mock purchases available", () => {
 await test("production: POST /api/billing/orders -> 503 PURCHASES_DISABLED, no DB access", () =>
   withNodeEnv("production", async () => {
     const res = await handleCreateOrderRequest(
-      new Request("https://yourai.example/api/billing/orders", { method: "POST", body: JSON.stringify({ packageId: "PKG_STARTER", gateway: "mock" }) }),
-      { getUserId: async () => "usr_1", dbClient: untouchableDb, trustedOrigins: () => ["https://yourai.example"] },
+      new Request("https://pixora.example/api/billing/orders", { method: "POST", body: JSON.stringify({ packageId: "PKG_STARTER", gateway: "mock" }) }),
+      { getUserId: async () => "usr_1", dbClient: untouchableDb, trustedOrigins: () => ["https://pixora.example"] },
     );
     assert.equal(res.status, 503);
     assert.equal((await res.json()).code, "PURCHASES_DISABLED");
@@ -125,7 +125,7 @@ await test("production: POST /api/billing/orders -> 503 PURCHASES_DISABLED, no D
 await test("production: POST /api/billing/verify -> 503 PURCHASES_DISABLED, no DB access", () =>
   withNodeEnv("production", async () => {
     const res = await handleVerifyPaymentRequest(
-      new Request("https://yourai.example/api/billing/verify", { method: "POST", body: JSON.stringify({ orderId: "o", gatewayOrderId: "g", gatewayPaymentId: "p", gatewaySignature: "s" }) }),
+      new Request("https://pixora.example/api/billing/verify", { method: "POST", body: JSON.stringify({ orderId: "o", gatewayOrderId: "g", gatewayPaymentId: "p", gatewaySignature: "s" }) }),
       { getUserId: async () => "usr_1", dbClient: untouchableDb },
     );
     assert.equal(res.status, 503);

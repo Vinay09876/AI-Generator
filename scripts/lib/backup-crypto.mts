@@ -14,7 +14,7 @@ import { Transform, Writable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 
 /**
- * Production-Grade Authenticated Encryption Primitives for YourAI Disaster Recovery
+ * Production-Grade Authenticated Encryption Primitives for Pixora Disaster Recovery
  *
  * Wire Format Version 3 (YOURAI_ENC_V3) - Chunk-Framed Authenticated Encryption:
  * +-------------------+-------------+-------------------+-----------------+----------------+-------------------+

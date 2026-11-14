@@ -9,7 +9,7 @@ export default function RegisterPage() {
   return (
     <AuthCard
       title="Create your account"
-      description={`Every new account starts with ${INITIAL_CREDITS} credits to explore YourAI.`}
+      description={`Every new account starts with ${INITIAL_CREDITS} credits to explore Pixora.`}
       footer={{ text: "Already have an account?", linkLabel: "Log in", href: ROUTES.login }}
     >
       <RegisterForm />

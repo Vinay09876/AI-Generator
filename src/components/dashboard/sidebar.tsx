@@ -1,7 +1,7 @@
 import { Coins } from "lucide-react";
 import Link from "next/link";
 import { Logo } from "@/components/ui/logo";
-import { APP_ROUTES } from "@/lib/constants";
+import { APP_ROUTES, ROUTES } from "@/lib/constants";
 import { formatNumber } from "@/lib/format";
 import { LogoutButton } from "./logout-button";
 import { SidebarNav } from "./sidebar-nav";
@@ -12,7 +12,7 @@ export function Sidebar({ user, balance }: { user: UserSummaryData; balance: num
   return (
     <aside className="sticky top-0 hidden h-dvh w-[264px] shrink-0 flex-col border-r border-white/[0.06] bg-surface/40 px-4 py-5 backdrop-blur-xl lg:flex">
       <div className="px-2">
-        <Logo />
+        <Logo href={ROUTES.dashboard} />
       </div>
 
       <div className="mt-8 flex-1 overflow-y-auto">

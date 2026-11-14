@@ -420,12 +420,12 @@ await runSection("Order Creation API Handler Rules", async () => {
   };
 
   // 1. Method check
-  const getReq = new Request("https://yourai.example/api/billing/orders", { method: "GET" });
+  const getReq = new Request("https://pixora.example/api/billing/orders", { method: "GET" });
   const getRes = await handleCreateOrderRequest(getReq, deps);
   assert(getRes.status === 405, "GET request returns HTTP 405 Method Not Allowed");
 
   // 2. Unauthenticated check (no session)
-  const unauthReq = new Request("https://yourai.example/api/billing/orders", {
+  const unauthReq = new Request("https://pixora.example/api/billing/orders", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ packageId: "PKG_STARTER" }),
@@ -438,9 +438,9 @@ await runSection("Order Creation API Handler Rules", async () => {
   const origEnv = envObj.NODE_ENV;
   try {
     envObj.NODE_ENV = "production";
-    const prodReq = new Request("https://yourai.example/api/billing/orders", {
+    const prodReq = new Request("https://pixora.example/api/billing/orders", {
       method: "POST",
-      headers: { "Content-Type": "application/json", origin: "https://yourai.example" },
+      headers: { "Content-Type": "application/json", origin: "https://pixora.example" },
       body: JSON.stringify({
         packageId: "PKG_STARTER",
         gateway: "mock",
@@ -448,7 +448,7 @@ await runSection("Order Creation API Handler Rules", async () => {
     });
     const prodRes = await handleCreateOrderRequest(prodReq, {
       ...deps,
-      trustedOrigins: () => ["https://yourai.example"],
+      trustedOrigins: () => ["https://pixora.example"],
     });
     // Post-S8: purchases are disabled outright in production, so the request is refused (503
     // PURCHASES_DISABLED) before the mock-gateway check is even reached.
@@ -458,7 +458,7 @@ await runSection("Order Creation API Handler Rules", async () => {
   }
 
   // 4. Request Body Validation: Missing packageId
-  const badPkgReq = new Request("https://yourai.example/api/billing/orders", {
+  const badPkgReq = new Request("https://pixora.example/api/billing/orders", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({}),
@@ -469,7 +469,7 @@ await runSection("Order Creation API Handler Rules", async () => {
   assert(badPkgJson.code === "INVALID_PACKAGE", "Returns code INVALID_PACKAGE");
 
     // 5. Request Body Validation: Unknown packageId
-    const unknownPkgReq = new Request("https://yourai.example/api/billing/orders", {
+    const unknownPkgReq = new Request("https://pixora.example/api/billing/orders", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ packageId: "PKG_NON_EXISTENT_999" }),
@@ -480,7 +480,7 @@ await runSection("Order Creation API Handler Rules", async () => {
   assert(unknownPkgJson.code === "UNKNOWN_PACKAGE", "Returns code UNKNOWN_PACKAGE");
 
     // 6. Request Body Validation: Disabled packageId
-    const disabledPkgReq = new Request("https://yourai.example/api/billing/orders", {
+    const disabledPkgReq = new Request("https://pixora.example/api/billing/orders", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ packageId: "PKG_DISABLED_TEST" }),
@@ -491,7 +491,7 @@ await runSection("Order Creation API Handler Rules", async () => {
   assert(disabledPkgJson.code === "PACKAGE_DISABLED", "Returns code PACKAGE_DISABLED");
 
   // 7. Successful Order Creation (resolves PKG_STARTER strictly from server catalog)
-  const validOrderReq = new Request("https://yourai.example/api/billing/orders", {
+  const validOrderReq = new Request("https://pixora.example/api/billing/orders", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -525,12 +525,12 @@ await runSection("Browser Payment Verification Handler Rules", async () => {
   const bobDeps = { getUserId: async () => "usr_bob", dbClient: db.getClient(), mockEngine };
 
   // 1. Method check
-  const getVerifyReq = new Request("https://yourai.example/api/billing/verify", { method: "GET" });
+  const getVerifyReq = new Request("https://pixora.example/api/billing/verify", { method: "GET" });
   const getVerifyRes = await handleVerifyPaymentRequest(getVerifyReq, aliceDeps);
   assert(getVerifyRes.status === 405, "GET /api/billing/verify returns HTTP 405");
 
   // 2. Unauthenticated check
-  const unauthVerify = new Request("https://yourai.example/api/billing/verify", {
+  const unauthVerify = new Request("https://pixora.example/api/billing/verify", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -544,7 +544,7 @@ await runSection("Browser Payment Verification Handler Rules", async () => {
   assert(unauthVerifyRes.status === 401, "Unauthenticated verify returns HTTP 401");
 
   // 3. Create an order for Alice using server package catalog
-  const createReq = new Request("https://yourai.example/api/billing/orders", {
+  const createReq = new Request("https://pixora.example/api/billing/orders", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -561,7 +561,7 @@ await runSection("Browser Payment Verification Handler Rules", async () => {
   const mockPayment = mockEngine.generatePaymentResponse(gatewayOrderId);
 
   // 4. Bob tries to verify Alice's order (Ownership violation -> 403 Forbidden)
-  const bobVerifyReq = new Request("https://yourai.example/api/billing/verify", {
+  const bobVerifyReq = new Request("https://pixora.example/api/billing/verify", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -576,7 +576,7 @@ await runSection("Browser Payment Verification Handler Rules", async () => {
   assert(bobVerifyRes.status === 403, "Caller verifying another user's order is rejected with HTTP 403 Forbidden");
 
   // 5. Tampered signature rejected (HTTP 400 INVALID_SIGNATURE)
-  const tamperedSigReq = new Request("https://yourai.example/api/billing/verify", {
+  const tamperedSigReq = new Request("https://pixora.example/api/billing/verify", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -593,7 +593,7 @@ await runSection("Browser Payment Verification Handler Rules", async () => {
   assert(tamperedSigJson.code === "INVALID_SIGNATURE", "Code is INVALID_SIGNATURE");
 
   // 6. Authentic verification by Alice -> HTTP 200 + wallet credited
-  const validVerifyReq = new Request("https://yourai.example/api/billing/verify", {
+  const validVerifyReq = new Request("https://pixora.example/api/billing/verify", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -614,7 +614,7 @@ await runSection("Browser Payment Verification Handler Rules", async () => {
   assert(validVerifyJson.alreadySettled === false, "alreadySettled is false for first settlement");
 
   // 7. Idempotent re-verification -> HTTP 200 alreadySettled: true (No double credit)
-  const reVerifyReq = new Request("https://yourai.example/api/billing/verify", {
+  const reVerifyReq = new Request("https://pixora.example/api/billing/verify", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -661,7 +661,7 @@ await runSection("Razorpay Webhook Fast-ACK & Deduplication", async () => {
   const signature = createHmac("sha256", secret).update(rawBody).digest("hex");
 
   // 1. Missing signature header
-  const reqNoSig = new Request("https://yourai.example/api/webhooks/payments/razorpay", {
+  const reqNoSig = new Request("https://pixora.example/api/webhooks/payments/razorpay", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: rawBody,
@@ -673,7 +673,7 @@ await runSection("Razorpay Webhook Fast-ACK & Deduplication", async () => {
   assert(resNoSig.status === 401, "Missing signature header returns HTTP 401");
 
   // 2. Tampered signature / body
-  const reqBadSig = new Request("https://yourai.example/api/webhooks/payments/razorpay", {
+  const reqBadSig = new Request("https://pixora.example/api/webhooks/payments/razorpay", {
     method: "POST",
     headers: { "Content-Type": "application/json", "x-razorpay-signature": "bad_sig_hex" },
     body: rawBody,
@@ -685,7 +685,7 @@ await runSection("Razorpay Webhook Fast-ACK & Deduplication", async () => {
   assert(resBadSig.status === 401, "Invalid signature returns HTTP 401");
 
   // 3. Valid signature -> Fast-ACK (HTTP 200)
-  const reqValid = new Request("https://yourai.example/api/webhooks/payments/razorpay", {
+  const reqValid = new Request("https://pixora.example/api/webhooks/payments/razorpay", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -705,7 +705,7 @@ await runSection("Razorpay Webhook Fast-ACK & Deduplication", async () => {
   assert(jsonValid.duplicate === false, "First delivery is not duplicate");
 
   // 4. Duplicate delivery with same eventId -> Fast-ACK HTTP 200 (duplicate: true)
-  const reqDup = new Request("https://yourai.example/api/webhooks/payments/razorpay", {
+  const reqDup = new Request("https://pixora.example/api/webhooks/payments/razorpay", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -865,7 +865,7 @@ await runSection("End-to-End Convergence: Client Verify + Delayed Webhook", asyn
   assert(initialWallet.balance === 100, "Alice begins with initial balance of 100 credits");
 
   // Step 1: User initiates checkout via POST /api/billing/orders
-  const orderReq = new Request("https://yourai.example/api/billing/orders", {
+  const orderReq = new Request("https://pixora.example/api/billing/orders", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -882,7 +882,7 @@ await runSection("End-to-End Convergence: Client Verify + Delayed Webhook", asyn
   // Step 2: User completes checkout in browser modal -> Client sends POST /api/billing/verify
   const clientPayment = mockEngine.generatePaymentResponse(gatewayOrderId);
 
-  const verifyReq = new Request("https://yourai.example/api/billing/verify", {
+  const verifyReq = new Request("https://pixora.example/api/billing/verify", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -924,7 +924,7 @@ await runSection("End-to-End Convergence: Client Verify + Delayed Webhook", asyn
   const webhookRawBody = JSON.stringify(webhookBodyObj);
   const webhookSignature = createHmac("sha256", secret).update(webhookRawBody).digest("hex");
 
-  const webhookReq = new Request("https://yourai.example/api/webhooks/payments/razorpay", {
+  const webhookReq = new Request("https://pixora.example/api/webhooks/payments/razorpay", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -969,7 +969,7 @@ await runSection("Financial Tamper Resistance & Server Catalog Enforcement", asy
   const client = db.getClient();
 
   // 1. Client attempts to forge creditsAllocated in request body
-  const forgedCreditsReq = new Request("https://yourai.example/api/billing/orders", {
+  const forgedCreditsReq = new Request("https://pixora.example/api/billing/orders", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -991,7 +991,7 @@ await runSection("Financial Tamper Resistance & Server Catalog Enforcement", asy
   assert(orderInDb.packageSnapshot.creditsAllocated === 100, "Snapshot holds strictly 100 credits");
 
   // 2. Client attempts to forge amountMinor (Undercharge attack)
-  const forgedAmountReq = new Request("https://yourai.example/api/billing/orders", {
+  const forgedAmountReq = new Request("https://pixora.example/api/billing/orders", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -1013,7 +1013,7 @@ await runSection("Financial Tamper Resistance & Server Catalog Enforcement", asy
   );
 
   // 3. Client attempts to forge currency
-  const forgedCurrencyReq = new Request("https://yourai.example/api/billing/orders", {
+  const forgedCurrencyReq = new Request("https://pixora.example/api/billing/orders", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -1031,7 +1031,7 @@ await runSection("Financial Tamper Resistance & Server Catalog Enforcement", asy
   );
 
   // 4. Client attempts to supply forged packageSnapshot
-  const forgedSnapshotReq = new Request("https://yourai.example/api/billing/orders", {
+  const forgedSnapshotReq = new Request("https://pixora.example/api/billing/orders", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -1053,7 +1053,7 @@ await runSection("Financial Tamper Resistance & Server Catalog Enforcement", asy
   );
 
   // 5. Malformed packageId (empty, non-string, spaces)
-  const emptyPkgReq = new Request("https://yourai.example/api/billing/orders", {
+  const emptyPkgReq = new Request("https://pixora.example/api/billing/orders", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ packageId: "   " }),
@@ -1064,7 +1064,7 @@ await runSection("Financial Tamper Resistance & Server Catalog Enforcement", asy
   assert(emptyPkgJson.code === "INVALID_PACKAGE", "Code is INVALID_PACKAGE");
 
   // 6. Unknown packageId
-  const unknownPkgReq = new Request("https://yourai.example/api/billing/orders", {
+  const unknownPkgReq = new Request("https://pixora.example/api/billing/orders", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ packageId: "PKG_MALICIOUS_TIER" }),

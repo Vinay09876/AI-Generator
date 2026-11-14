@@ -583,12 +583,12 @@ async function main() {
     });
 
     // 1. Rejection on 405 Method Not Allowed
-    const getReq = new Request("https://yourai.test/api/account/delete", { method: "GET" });
+    const getReq = new Request("https://pixora.test/api/account/delete", { method: "GET" });
     const getRes = await handleDeleteAccountRequest(getReq, { dbClient: client });
     assert(getRes.status === 405, "GET request returns 405");
 
     // 2. Rejection on 401 Unauthenticated
-    const unauthReq = new Request("https://yourai.test/api/account/delete", {
+    const unauthReq = new Request("https://pixora.test/api/account/delete", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ password: "Secret123!" }),
@@ -600,7 +600,7 @@ async function main() {
     assert(unauthRes.status === 401, "Unauthenticated request returns 401");
 
     // 3. Rejection on 400 Invalid Confirmation
-    const badConfirmReq = new Request("https://yourai.test/api/account/delete", {
+    const badConfirmReq = new Request("https://pixora.test/api/account/delete", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ password: "Wrong" }),
@@ -614,7 +614,7 @@ async function main() {
     assert(badJson.code === "INVALID_CONFIRMATION", "Error code is INVALID_CONFIRMATION");
 
     // 4. Success on 200
-    const successReq = new Request("https://yourai.test/api/account/delete", {
+    const successReq = new Request("https://pixora.test/api/account/delete", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ password: "Secret123!" }),
@@ -900,7 +900,7 @@ async function main() {
     assert(isAdmin(null, null) === false, "Null user is rejected");
 
     // 2. handleGetModerationQueueRequest: 403 for non-admin
-    const nonAdminGetReq = new Request("https://yourai.test/api/admin/moderation");
+    const nonAdminGetReq = new Request("https://pixora.test/api/admin/moderation");
     const nonAdminGetRes = await handleGetModerationQueueRequest(nonAdminGetReq, {
       getUserId: async () => "user_regular",
       isAdmin: () => false,
@@ -909,7 +909,7 @@ async function main() {
     assert(nonAdminGetRes.status === 403, "Non-admin queue GET returns 403");
 
     // 3. handleGetModerationQueueRequest: 200 for admin
-    const adminGetReq = new Request("https://yourai.test/api/admin/moderation");
+    const adminGetReq = new Request("https://pixora.test/api/admin/moderation");
     const adminGetRes = await handleGetModerationQueueRequest(adminGetReq, {
       getUserId: async () => "admin_user",
       isAdmin: () => true,
@@ -924,7 +924,7 @@ async function main() {
     assert(reportId === initialReport.id, "Queue returns seeded report ID");
 
     // 4. handleActionModerationRequest: 403 for non-admin
-    const nonAdminActReq = new Request("https://yourai.test/api/admin/moderation/action", {
+    const nonAdminActReq = new Request("https://pixora.test/api/admin/moderation/action", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ reportId, action: "WARN_USER", notes: "First warning issued" }),
@@ -937,7 +937,7 @@ async function main() {
     assert(nonAdminActRes.status === 403, "Non-admin action POST returns 403");
 
     // 5. handleActionModerationRequest: 200 for admin
-    const adminActReq = new Request("https://yourai.test/api/admin/moderation/action", {
+    const adminActReq = new Request("https://pixora.test/api/admin/moderation/action", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ reportId, action: "WARN_USER", notes: "First warning issued" }),
@@ -981,7 +981,7 @@ async function main() {
     assert(submitErrorThrown, "submitAbuseReport throws ModerationServiceUnavailableError on DB failure");
 
     // Verify API handler returns 503 SERVICE_UNAVAILABLE
-    const failingSubmitReq = new Request("https://yourai.test/api/moderation/reports", {
+    const failingSubmitReq = new Request("https://pixora.test/api/moderation/reports", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -1052,7 +1052,7 @@ async function main() {
     assert(actionErrorThrown, "actionModerationItem throws ModerationServiceUnavailableError on tx failure");
 
     // Verify API handler returns 503 SERVICE_UNAVAILABLE
-    const failingActReq = new Request("https://yourai.test/api/admin/moderation/action", {
+    const failingActReq = new Request("https://pixora.test/api/admin/moderation/action", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -1084,21 +1084,21 @@ async function main() {
     const cronSecret = "ultra-secret-cron-token-1234567890";
 
     // 1. Outside production, cron is open for local developer workflows
-    const devReq = new Request("https://yourai.test/api/cron/billing");
+    const devReq = new Request("https://pixora.test/api/cron/billing");
     assert(
       isVideoCronRequestAuthorized(devReq, { NODE_ENV: "development" }) === true,
       "Cron authorized in development without headers",
     );
 
     // 2. In production without token -> FAILS CLOSED (false)
-    const prodNoTokenReq = new Request("https://yourai.test/api/cron/billing");
+    const prodNoTokenReq = new Request("https://pixora.test/api/cron/billing");
     assert(
       isVideoCronRequestAuthorized(prodNoTokenReq, { NODE_ENV: "production", CRON_SECRET: cronSecret }) === false,
       "Production rejects request missing Authorization header",
     );
 
     // 3. In production with wrong token -> FAILS CLOSED (false)
-    const prodBadTokenReq = new Request("https://yourai.test/api/cron/billing", {
+    const prodBadTokenReq = new Request("https://pixora.test/api/cron/billing", {
       headers: { Authorization: "Bearer wrong-token" },
     });
     assert(
@@ -1107,7 +1107,7 @@ async function main() {
     );
 
     // 4. In production with valid Bearer token -> ACCEPTED (true)
-    const prodGoodTokenReq = new Request("https://yourai.test/api/cron/billing", {
+    const prodGoodTokenReq = new Request("https://pixora.test/api/cron/billing", {
       headers: { Authorization: `Bearer ${cronSecret}` },
     });
     assert(
@@ -1130,7 +1130,7 @@ async function main() {
     assert(settings.includes("unsupported") && settings.includes("deletion"), "Settings mentions unsupported deletion");
 
     // No fake emails in marketing or settings
-    const fakeEmailPattern = /@yourai\.|support@|legal@|privacy@|help@|dpo@/i;
+    const fakeEmailPattern = /@(yourai|pixora)\.|support@|legal@|privacy@|help@|dpo@/i;
     assert(!fakeEmailPattern.test(terms), "No fake email in terms");
     assert(!fakeEmailPattern.test(privacy), "No fake email in privacy");
     assert(!fakeEmailPattern.test(settings), "No fake email in settings");

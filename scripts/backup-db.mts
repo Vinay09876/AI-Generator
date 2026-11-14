@@ -17,7 +17,7 @@ import {
 } from "./lib/backup-guard.mjs";
 
 /**
- * YourAI — Production-Grade PostgreSQL Disaster Recovery Backup Utility
+ * Pixora — Production-Grade PostgreSQL Disaster Recovery Backup Utility
  *
  * Architecture & Security Invariants:
  *  - Uses `pg_dump` with custom archive format (`-Fc`), portable across PostgreSQL versions.
@@ -70,7 +70,7 @@ export function parseArgs(args: string[]): DbBackupOptions {
 
 export function printHelp(): void {
   console.log(`
-YourAI PostgreSQL Disaster Recovery Backup Utility
+Pixora PostgreSQL Disaster Recovery Backup Utility
 ==================================================
 
 Exports a consistent, compressed custom-format (-Fc) dump of PostgreSQL and streams it

@@ -375,20 +375,20 @@ try {
   // ===================================================================== helpers
   section("Trusted origin resolution");
   {
-    ok(JSON.stringify(resolveTrustedOrigins({ APP_ORIGIN: "https://yourai.example, https://www.yourai.example/", NODE_ENV: "production" })) ===
-      JSON.stringify(["https://yourai.example", "https://www.yourai.example"]), "APP_ORIGIN list parsed and normalised to origins");
+    ok(JSON.stringify(resolveTrustedOrigins({ APP_ORIGIN: "https://pixora.example, https://www.pixora.example/", NODE_ENV: "production" })) ===
+      JSON.stringify(["https://pixora.example", "https://www.pixora.example"]), "APP_ORIGIN list parsed and normalised to origins");
     ok(resolveTrustedOrigins({ AUTH_URL: "https://auth.example/api/auth", NODE_ENV: "production" })[0] === "https://auth.example", "AUTH_URL origin trusted");
     ok(resolveTrustedOrigins({ APP_ORIGIN: "not a url, ftp://x.example", NODE_ENV: "production" }).length === 0, "invalid / non-http entries ignored");
     ok(resolveTrustedOrigins({ NODE_ENV: "production" }).length === 0, "production with nothing configured: empty list (fail closed)");
     ok(resolveTrustedOrigins({ NODE_ENV: "development" }).includes("http://localhost:3000"), "development fallback: localhost:3000");
-    const trusted = ["https://yourai.example"];
-    const req = (h: Record<string, string>) => new Request("https://yourai.example/api/generations/image", { method: "POST", headers: h });
-    ok(isTrustedOrigin(req({ origin: "https://yourai.example" }), trusted), "matching Origin accepted");
+    const trusted = ["https://pixora.example"];
+    const req = (h: Record<string, string>) => new Request("https://pixora.example/api/generations/image", { method: "POST", headers: h });
+    ok(isTrustedOrigin(req({ origin: "https://pixora.example" }), trusted), "matching Origin accepted");
     ok(!isTrustedOrigin(req({}), trusted), "missing Origin rejected");
     ok(!isTrustedOrigin(req({ origin: "null" }), trusted), "Origin: null rejected");
     ok(!isTrustedOrigin(req({ origin: "https://evil.example", host: "evil.example", "x-forwarded-host": "evil.example" }), trusted), "spoofed Host / X-Forwarded-Host do not make a foreign Origin trusted");
-    ok(!isTrustedOrigin(req({ origin: "https://yourai.example", "sec-fetch-site": "cross-site" }), trusted), "Sec-Fetch-Site: cross-site rejected");
-    ok(!isTrustedOrigin(req({ origin: "https://yourai.example.evil.example" }), trusted), "suffix-lookalike origin rejected (exact match)");
+    ok(!isTrustedOrigin(req({ origin: "https://pixora.example", "sec-fetch-site": "cross-site" }), trusted), "Sec-Fetch-Site: cross-site rejected");
+    ok(!isTrustedOrigin(req({ origin: "https://pixora.example.evil.example" }), trusted), "suffix-lookalike origin rejected (exact match)");
   }
 
   section("JSON body reader");
@@ -727,7 +727,7 @@ try {
 
   // ===================================================================== HTTP handlers
   section("HTTP — POST /api/generations/image");
-  const ORIGIN = "https://yourai.example";
+  const ORIGIN = "https://pixora.example";
   function httpHarness(behaviour?: ProviderBehaviour) {
     const h = harness(behaviour);
     let session: string | null = null;

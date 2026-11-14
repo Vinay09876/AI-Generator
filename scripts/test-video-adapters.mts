@@ -859,12 +859,12 @@ ok(
 section("Section 7: Server-Side QA Authorization & Entitlement Gating");
 
 // parseQaAllowlist helper
-const parsedAllowlist = parseQaAllowlist("cuser_qa_1, cuser_qa_2; qa1@yourai.test\nqa2@yourai.test");
+const parsedAllowlist = parseQaAllowlist("cuser_qa_1, cuser_qa_2; qa1@pixora.test\nqa2@pixora.test");
 ok(
   parsedAllowlist.userIds.has("cuser_qa_1") &&
     parsedAllowlist.userIds.has("cuser_qa_2") &&
-    parsedAllowlist.emails.has("qa1@yourai.test") &&
-    parsedAllowlist.emails.has("qa2@yourai.test"),
+    parsedAllowlist.emails.has("qa1@pixora.test") &&
+    parsedAllowlist.emails.has("qa2@pixora.test"),
   "parseQaAllowlist parses comma, semicolon, and newline-separated user IDs and emails"
 );
 ok(
@@ -875,7 +875,7 @@ ok(
 // 1. Missing QA configuration
 ok(
   isServerAuthorizedQaUser({
-    user: { id: "cuser_qa_1", email: "qa@yourai.test", emailVerified: true },
+    user: { id: "cuser_qa_1", email: "qa@pixora.test", emailVerified: true },
     allowlistRaw: undefined,
     nodeEnv: "production",
   }) === false,
@@ -883,7 +883,7 @@ ok(
 );
 ok(
   isServerAuthorizedQaUser({
-    user: { id: "cuser_qa_1", email: "qa@yourai.test", emailVerified: true },
+    user: { id: "cuser_qa_1", email: "qa@pixora.test", emailVerified: true },
     allowlistRaw: null,
     nodeEnv: "development",
   }) === false,
@@ -909,7 +909,7 @@ ok(
 );
 
 // 3. Unauthorized users
-const testAllowlist = "cuser_qa_123, verified-qa@yourai.test";
+const testAllowlist = "cuser_qa_123, verified-qa@pixora.test";
 ok(
   isServerAuthorizedQaUser({
     user: { id: "cuser_unauthorized_999", email: "stranger@example.com", emailVerified: true },
@@ -944,28 +944,28 @@ ok(
 // 5. Verified vs unverified email identities
 ok(
   isServerAuthorizedQaUser({
-    user: { email: "verified-qa@yourai.test", emailVerified: new Date() },
+    user: { email: "verified-qa@pixora.test", emailVerified: new Date() },
     allowlistRaw: testAllowlist,
   }) === true,
   "isServerAuthorizedQaUser authorizes email match when emailVerified is a Date"
 );
 ok(
   isServerAuthorizedQaUser({
-    user: { email: "verified-qa@yourai.test", emailVerified: true },
+    user: { email: "verified-qa@pixora.test", emailVerified: true },
     allowlistRaw: testAllowlist,
   }) === true,
   "isServerAuthorizedQaUser authorizes email match when emailVerified is true"
 );
 ok(
   isServerAuthorizedQaUser({
-    user: { email: "verified-qa@yourai.test", emailVerified: null },
+    user: { email: "verified-qa@pixora.test", emailVerified: null },
     allowlistRaw: testAllowlist,
   }) === false,
   "isServerAuthorizedQaUser strictly denies unverified email match (emailVerified: null)"
 );
 ok(
   isServerAuthorizedQaUser({
-    user: { email: "verified-qa@yourai.test", emailVerified: false },
+    user: { email: "verified-qa@pixora.test", emailVerified: false },
     allowlistRaw: testAllowlist,
   }) === false,
   "isServerAuthorizedQaUser strictly denies unverified email match (emailVerified: false)"
@@ -974,7 +974,7 @@ ok(
 // 6. Email case and whitespace normalization
 ok(
   isServerAuthorizedQaUser({
-    user: { email: "  VERIFIED-QA@YourAI.Test  ", emailVerified: true },
+    user: { email: "  VERIFIED-QA@Pixora.Test  ", emailVerified: true },
     allowlistRaw: testAllowlist,
   }) === true,
   "isServerAuthorizedQaUser normalizes email case and whitespace for matching"

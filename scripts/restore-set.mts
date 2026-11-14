@@ -16,7 +16,7 @@ import { runDatabaseRestore } from "./restore-db.mjs";
 import type { BackupSetManifest } from "./backup-set.mjs";
 
 /**
- * YourAI — Coordinated Disaster Recovery Restore-Set Utility
+ * Pixora — Coordinated Disaster Recovery Restore-Set Utility
  *
  * Restoration Sequence Invariants:
  *  1. Verifies Backup Set status === "VERIFIED" and authenticates manifest HMAC signature.
@@ -80,7 +80,7 @@ export function parseArgs(args: string[]): RestoreSetOptions {
 
 export function printHelp(): void {
   console.log(`
-YourAI Coordinated Disaster Recovery Restore-Set Utility
+Pixora Coordinated Disaster Recovery Restore-Set Utility
 ========================================================
 
 Safely restores a complete coordinated backup set:

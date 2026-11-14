@@ -455,7 +455,7 @@ async function runAllTests(): Promise<void> {
     assert(invoiceInter.summary.sgstMinor === 0, "SGST is 0 for inter-state supply");
 
     // 1.4 Merchant and Statutory Details
-    assert(invoiceDefault.merchant.legalName.includes("YourAI"), "Merchant legal name populated");
+    assert(invoiceDefault.merchant.legalName.includes("Pixora"), "Merchant legal name populated");
     assert(invoiceDefault.merchant.sacCode === "998314", "Merchant SAC code is 998314");
     assert(invoiceDefault.customer.userId === "usr_alice", "Customer userId is usr_alice");
     assert(invoiceDefault.customer.email === "alice@example.com", "Customer email matches");

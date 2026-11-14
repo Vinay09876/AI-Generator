@@ -152,7 +152,7 @@ export function generateAssSubtitles(
 
   const scriptHeader = [
     "[Script Info]",
-    `; Script generated for YourAI Clipper - Highlight "${sanitizeAssText(clip.title)}"`,
+    `; Script generated for Pixora Clipper - Highlight "${sanitizeAssText(clip.title)}"`,
     "ScriptType: v4.00+",
     `PlayResX: ${canvas.width}`,
     `PlayResY: ${canvas.height}`,

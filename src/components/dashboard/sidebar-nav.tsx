@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { motion } from "motion/react";
 import { cn } from "@/lib/utils";
+import { LinkPendingIndicator } from "./link-pending-indicator";
 import { isActivePath, NAV_SECTIONS } from "./nav-items";
 
 /**
@@ -52,6 +53,7 @@ export function SidebarNav({ layoutGroup, onNavigate }: { layoutGroup: string; o
                       )}
                     />
                     <span className="relative">{label}</span>
+                    <LinkPendingIndicator className="relative ml-auto" />
                   </Link>
                 </li>
               );

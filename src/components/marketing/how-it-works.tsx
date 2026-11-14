@@ -22,7 +22,7 @@ const STEPS: Step[] = [
   {
     icon: WandSparkles,
     title: "Generate with AI",
-    description: "YourAI renders images, videos or highlight clips and shows the credit cost up front.",
+    description: "Pixora renders images, videos or highlight clips and shows the credit cost up front.",
     detail: <PulseSwatches />,
   },
   {

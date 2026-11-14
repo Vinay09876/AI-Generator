@@ -67,7 +67,7 @@ export async function defaultStorageVerifier(
 }
 
 /**
- * YourAI — Production Operator CLI: Ambiguous Video Job Resolution
+ * Pixora — Production Operator CLI: Ambiguous Video Job Resolution
  *
  * Operational & Safety Architecture:
  *  - Resolves generation jobs trapped in an ambiguous/unresolved PROCESSING state
@@ -623,7 +623,7 @@ export async function runCli(
     }
 
     console.log("================================================================================");
-    console.log(`YourAI Operator CLI — Ambiguous Job Resolution [${options.confirm ? "EXECUTION" : "DRY RUN"}]`);
+    console.log(`Pixora Operator CLI — Ambiguous Job Resolution [${options.confirm ? "EXECUTION" : "DRY RUN"}]`);
     console.log("================================================================================");
 
     const result = await executeResolution(options, db, storageVerifier);

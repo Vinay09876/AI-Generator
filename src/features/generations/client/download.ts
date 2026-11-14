@@ -11,7 +11,7 @@
 const SAFE_ID = /^[A-Za-z0-9_-]{1,64}$/;
 
 export function assetFilename(jobId: string) {
-  return `yourai-${SAFE_ID.test(jobId) ? jobId : "image"}.webp`;
+  return `pixora-${SAFE_ID.test(jobId) ? jobId : "image"}.webp`;
 }
 
 export const isAssetUrl = (url: string) => /^\/api\/assets\/[A-Za-z0-9_%-]{1,200}$/.test(url);

@@ -189,7 +189,7 @@ class GlobalMockDb {
   user = {
     findUnique: async ({ where }: any) => {
       const id = where?.id ?? "user-1";
-      return { id, email: "qa@yourai.test", emailVerified: new Date() };
+      return { id, email: "qa@pixora.test", emailVerified: new Date() };
     },
   };
 
@@ -285,7 +285,7 @@ console.log("\n# Section 1: Authentication, CSRF & Rate Limiting Guardrails");
 
   const handlers = createVideoGenerationHandlers({
     getUserId: async () => currentUserId,
-    trustedOrigins: () => ["https://yourai.test"],
+    trustedOrigins: () => ["https://pixora.test"],
     getProvider: () => provider as any,
     loadJob: async () => null,
     loadBalance: async () => 100,
@@ -304,10 +304,10 @@ console.log("\n# Section 1: Authentication, CSRF & Rate Limiting Guardrails");
 
   // 1. Unauthenticated POST
   currentUserId = null;
-  const unauthReq = new Request("https://yourai.test/api/generations/video", {
+  const unauthReq = new Request("https://pixora.test/api/generations/video", {
     method: "POST",
     headers: {
-      origin: "https://yourai.test",
+      origin: "https://pixora.test",
       "content-type": "application/json",
       "idempotency-key": "idem-key-unauth-12345",
     },
@@ -320,7 +320,7 @@ console.log("\n# Section 1: Authentication, CSRF & Rate Limiting Guardrails");
 
   // 2. Untrusted Origin / CSRF Block
   currentUserId = "user-auth-001";
-  const untrustedReq = new Request("https://yourai.test/api/generations/video", {
+  const untrustedReq = new Request("https://pixora.test/api/generations/video", {
     method: "POST",
     headers: {
       origin: "https://attacker.evil.com",
@@ -335,10 +335,10 @@ console.log("\n# Section 1: Authentication, CSRF & Rate Limiting Guardrails");
   ok(untrustedJson.error?.code === "FORBIDDEN_ORIGIN", "identifies FORBIDDEN_ORIGIN");
 
   // 3. Rate Limiting (Burst Throttle)
-  const rlReq1 = new Request("https://yourai.test/api/generations/video", {
+  const rlReq1 = new Request("https://pixora.test/api/generations/video", {
     method: "POST",
     headers: {
-      origin: "https://yourai.test",
+      origin: "https://pixora.test",
       "x-forwarded-for": "198.51.100.5",
       "content-type": "application/json",
       "idempotency-key": "idem-rl-1",
@@ -347,10 +347,10 @@ console.log("\n# Section 1: Authentication, CSRF & Rate Limiting Guardrails");
   });
   await handlers.postVideo(rlReq1);
 
-  const rlReq2 = new Request("https://yourai.test/api/generations/video", {
+  const rlReq2 = new Request("https://pixora.test/api/generations/video", {
     method: "POST",
     headers: {
-      origin: "https://yourai.test",
+      origin: "https://pixora.test",
       "x-forwarded-for": "198.51.100.5",
       "content-type": "application/json",
       "idempotency-key": "idem-rl-2",
@@ -359,10 +359,10 @@ console.log("\n# Section 1: Authentication, CSRF & Rate Limiting Guardrails");
   });
   await handlers.postVideo(rlReq2);
 
-  const rlReq3 = new Request("https://yourai.test/api/generations/video", {
+  const rlReq3 = new Request("https://pixora.test/api/generations/video", {
     method: "POST",
     headers: {
-      origin: "https://yourai.test",
+      origin: "https://pixora.test",
       "x-forwarded-for": "198.51.100.5",
       "content-type": "application/json",
       "idempotency-key": "idem-rl-3",
@@ -384,10 +384,10 @@ console.log("\n# Section 2: Input Validation & Entitlement Security");
     getUserId: async () => "user-qa-001",
     getUser: async (id) => ({
       id,
-      email: "qa@yourai.test",
+      email: "qa@pixora.test",
       emailVerified: new Date(),
     }),
-    trustedOrigins: () => ["https://yourai.test"],
+    trustedOrigins: () => ["https://pixora.test"],
     getProvider: () => provider as any,
     loadJob: async () => null,
     loadBalance: async () => 100,
@@ -399,9 +399,9 @@ console.log("\n# Section 2: Input Validation & Entitlement Security");
   });
 
   // 1. Missing Idempotency Key
-  const noKeyReq = new Request("https://yourai.test/api/generations/video", {
+  const noKeyReq = new Request("https://pixora.test/api/generations/video", {
     method: "POST",
-    headers: { origin: "https://yourai.test", "content-type": "application/json" },
+    headers: { origin: "https://pixora.test", "content-type": "application/json" },
     body: JSON.stringify({ prompt: "A drone shot" }),
   });
   const noKeyRes = await handlers.postVideo(noKeyReq);
@@ -410,10 +410,10 @@ console.log("\n# Section 2: Input Validation & Entitlement Security");
   ok(noKeyJson.error?.code === "INVALID_INPUT", "identifies INVALID_INPUT");
 
   // 2. Short Idempotency Key (< 8 chars)
-  const shortKeyReq = new Request("https://yourai.test/api/generations/video", {
+  const shortKeyReq = new Request("https://pixora.test/api/generations/video", {
     method: "POST",
     headers: {
-      origin: "https://yourai.test",
+      origin: "https://pixora.test",
       "content-type": "application/json",
       "idempotency-key": "short",
     },
@@ -423,10 +423,10 @@ console.log("\n# Section 2: Input Validation & Entitlement Security");
   ok(shortKeyRes.status === 400, "short idempotency key (<8 chars) returns HTTP 400");
 
   // 3. Empty / Whitespace Prompt
-  const emptyPromptReq = new Request("https://yourai.test/api/generations/video", {
+  const emptyPromptReq = new Request("https://pixora.test/api/generations/video", {
     method: "POST",
     headers: {
-      origin: "https://yourai.test",
+      origin: "https://pixora.test",
       "content-type": "application/json",
       "idempotency-key": "valid-idem-key-001",
     },
@@ -436,10 +436,10 @@ console.log("\n# Section 2: Input Validation & Entitlement Security");
   ok(emptyPromptRes.status === 400, "whitespace prompt returns HTTP 400");
 
   // 4. Prompt Exceeding 2048 Characters
-  const longPromptReq = new Request("https://yourai.test/api/generations/video", {
+  const longPromptReq = new Request("https://pixora.test/api/generations/video", {
     method: "POST",
     headers: {
-      origin: "https://yourai.test",
+      origin: "https://pixora.test",
       "content-type": "application/json",
       "idempotency-key": "valid-idem-key-002",
     },
@@ -449,10 +449,10 @@ console.log("\n# Section 2: Input Validation & Entitlement Security");
   ok(longPromptRes.status === 400, "prompt > 2048 characters returns HTTP 400");
 
   // 5. Unsupported Aspect Ratio
-  const badAspectReq = new Request("https://yourai.test/api/generations/video", {
+  const badAspectReq = new Request("https://pixora.test/api/generations/video", {
     method: "POST",
     headers: {
-      origin: "https://yourai.test",
+      origin: "https://pixora.test",
       "content-type": "application/json",
       "idempotency-key": "valid-idem-key-003",
     },
@@ -462,10 +462,10 @@ console.log("\n# Section 2: Input Validation & Entitlement Security");
   ok(badAspectRes.status === 400, "unsupported aspect ratio (4:3) returns HTTP 400");
 
   // 5b. Unsupported Frame Rate (model operates at 16 fps, claims of 24 fps are strictly rejected)
-  const badFpsReq = new Request("https://yourai.test/api/generations/video", {
+  const badFpsReq = new Request("https://pixora.test/api/generations/video", {
     method: "POST",
     headers: {
-      origin: "https://yourai.test",
+      origin: "https://pixora.test",
       "content-type": "application/json",
       "idempotency-key": "valid-idem-key-003b",
     },
@@ -477,8 +477,8 @@ console.log("\n# Section 2: Input Validation & Entitlement Security");
   // 6. Client Tier Manipulation: Attacker sends tier: "paid", isQa: true
   const spoofHandler = createVideoGenerationHandlers({
     getUserId: async () => "user-unauthorized-001",
-    getUser: async (id) => ({ id, email: "regular@yourai.test", emailVerified: new Date() }),
-    trustedOrigins: () => ["https://yourai.test"],
+    getUser: async (id) => ({ id, email: "regular@pixora.test", emailVerified: new Date() }),
+    trustedOrigins: () => ["https://pixora.test"],
     getProvider: () => provider as any,
     loadJob: async () => null,
     loadBalance: async () => 100,
@@ -489,10 +489,10 @@ console.log("\n# Section 2: Input Validation & Entitlement Security");
     nodeEnv: "production",
   });
 
-  const spoofReq = new Request("https://yourai.test/api/generations/video", {
+  const spoofReq = new Request("https://pixora.test/api/generations/video", {
     method: "POST",
     headers: {
-      origin: "https://yourai.test",
+      origin: "https://pixora.test",
       "content-type": "application/json",
       "idempotency-key": "valid-idem-spoof-001",
     },
@@ -521,7 +521,7 @@ console.log("\n# Section 3: Accounting, Idempotency & Concurrency Guardrails");
     public dailyCount = 0;
 
     user = {
-      findUnique: async () => ({ id: "user-acct-001", email: "qa@yourai.test", emailVerified: new Date() }),
+      findUnique: async () => ({ id: "user-acct-001", email: "qa@pixora.test", emailVerified: new Date() }),
     };
 
     creditWallet = {
@@ -625,8 +625,8 @@ console.log("\n# Section 3: Accounting, Idempotency & Concurrency Guardrails");
 
   const handlers = createVideoGenerationHandlers({
     getUserId: async () => "user-acct-001",
-    getUser: async (id) => ({ id, email: "qa@yourai.test", emailVerified: new Date() }),
-    trustedOrigins: () => ["https://yourai.test"],
+    getUser: async (id) => ({ id, email: "qa@pixora.test", emailVerified: new Date() }),
+    trustedOrigins: () => ["https://pixora.test"],
     getProvider: () => provider as any,
     loadJob: async (u, j) => db.jobs.get(j) ?? null,
     loadBalance: async () => db.walletBalance,
@@ -638,10 +638,10 @@ console.log("\n# Section 3: Accounting, Idempotency & Concurrency Guardrails");
   });
 
   // 1. Insufficient Credits (Wallet balance = 5, cost = 10)
-  const brokeReq = new Request("https://yourai.test/api/generations/video", {
+  const brokeReq = new Request("https://pixora.test/api/generations/video", {
     method: "POST",
     headers: {
-      origin: "https://yourai.test",
+      origin: "https://pixora.test",
       "content-type": "application/json",
       "idempotency-key": "idem-broke-001",
     },
@@ -658,8 +658,8 @@ console.log("\n# Section 3: Accounting, Idempotency & Concurrency Guardrails");
 
   const promoLimitHandler = createVideoGenerationHandlers({
     getUserId: async () => "user-promo-001",
-    getUser: async (id) => ({ id, email: "promo@yourai.test", emailVerified: new Date() }),
-    trustedOrigins: () => ["https://yourai.test"],
+    getUser: async (id) => ({ id, email: "promo@pixora.test", emailVerified: new Date() }),
+    trustedOrigins: () => ["https://pixora.test"],
     getProvider: () => provider as any,
     loadJob: async (u, j) => db.jobs.get(j) ?? null,
     loadBalance: async () => db.walletBalance,
@@ -671,10 +671,10 @@ console.log("\n# Section 3: Accounting, Idempotency & Concurrency Guardrails");
   });
 
   // 2. Promotional Quota Exceeded (1 generation/day)
-  const quotaReq = new Request("https://yourai.test/api/generations/video", {
+  const quotaReq = new Request("https://pixora.test/api/generations/video", {
     method: "POST",
     headers: {
-      origin: "https://yourai.test",
+      origin: "https://pixora.test",
       "content-type": "application/json",
       "idempotency-key": "idem-quota-001",
     },
@@ -694,10 +694,10 @@ console.log("\n# Section 3: Accounting, Idempotency & Concurrency Guardrails");
     status: "PROCESSING",
   });
 
-  const activeJobReq = new Request("https://yourai.test/api/generations/video", {
+  const activeJobReq = new Request("https://pixora.test/api/generations/video", {
     method: "POST",
     headers: {
-      origin: "https://yourai.test",
+      origin: "https://pixora.test",
       "content-type": "application/json",
       "idempotency-key": "idem-active-001",
     },
@@ -719,7 +719,7 @@ console.log("\n# Section 4: Asynchronous Dispatch, Fast 202 & Ambiguous Provider
     public walletBalance = 100;
 
     user = {
-      findUnique: async () => ({ id: "user-async-001", email: "qa@yourai.test", emailVerified: new Date() }),
+      findUnique: async () => ({ id: "user-async-001", email: "qa@pixora.test", emailVerified: new Date() }),
     };
 
     creditWallet = {
@@ -825,8 +825,8 @@ console.log("\n# Section 4: Asynchronous Dispatch, Fast 202 & Ambiguous Provider
 
   const handlers = createVideoGenerationHandlers({
     getUserId: async () => "user-async-001",
-    getUser: async (id) => ({ id, email: "qa@yourai.test", emailVerified: new Date() }),
-    trustedOrigins: () => ["https://yourai.test"],
+    getUser: async (id) => ({ id, email: "qa@pixora.test", emailVerified: new Date() }),
+    trustedOrigins: () => ["https://pixora.test"],
     getProvider: () => provider as any,
     loadJob: async (u, j) => db.jobs.get(j) ?? null,
     loadBalance: async () => db.walletBalance,
@@ -839,10 +839,10 @@ console.log("\n# Section 4: Asynchronous Dispatch, Fast 202 & Ambiguous Provider
 
   // 1. Successful Asynchronous Submission -> HTTP 202 Accepted
   provider.mode = "success";
-  const submitReq = new Request("https://yourai.test/api/generations/video", {
+  const submitReq = new Request("https://pixora.test/api/generations/video", {
     method: "POST",
     headers: {
-      origin: "https://yourai.test",
+      origin: "https://pixora.test",
       "content-type": "application/json",
       "idempotency-key": "idem-async-ok-001",
     },
@@ -867,10 +867,10 @@ console.log("\n# Section 4: Asynchronous Dispatch, Fast 202 & Ambiguous Provider
 
   // 3. Definite Provider Rejection (not_run) -> HTTP 502 with immediate refund
   provider.mode = "fail:not_run";
-  const rejectReq = new Request("https://yourai.test/api/generations/video", {
+  const rejectReq = new Request("https://pixora.test/api/generations/video", {
     method: "POST",
     headers: {
-      origin: "https://yourai.test",
+      origin: "https://pixora.test",
       "content-type": "application/json",
       "idempotency-key": "idem-async-reject-001",
     },
@@ -883,10 +883,10 @@ console.log("\n# Section 4: Asynchronous Dispatch, Fast 202 & Ambiguous Provider
 
   // 4. Ambiguous Provider Acceptance (unknown: e.g. ECONNRESET or timeout) -> HTTP 202 Accepted (credits preserved)
   provider.mode = "fail:unknown";
-  const ambigReq = new Request("https://yourai.test/api/generations/video", {
+  const ambigReq = new Request("https://pixora.test/api/generations/video", {
     method: "POST",
     headers: {
-      origin: "https://yourai.test",
+      origin: "https://pixora.test",
       "content-type": "application/json",
       "idempotency-key": "idem-async-ambig-001",
     },
@@ -1235,7 +1235,7 @@ console.log("\n# Section 6: Lightweight Polling, Ingestion Signaling & Signed UR
 
   const handlers = createVideoGenerationHandlers({
     getUserId: async () => currentUserId,
-    trustedOrigins: () => ["https://yourai.test"],
+    trustedOrigins: () => ["https://pixora.test"],
     getProvider: () => new MockProvider() as any,
     loadJob: async (userId, jobId) => pollDb.findJob(userId, jobId),
     loadBalance: async () => 90,
@@ -1251,7 +1251,7 @@ console.log("\n# Section 6: Lightweight Polling, Ingestion Signaling & Signed UR
 
   // 1. Cross-User ID Probing (User Bravo tries to fetch User Alpha's job)
   currentUserId = "user-bravo";
-  const probeReq = new Request("https://yourai.test/api/generations/video/vjob-user-a-comp", {
+  const probeReq = new Request("https://pixora.test/api/generations/video/vjob-user-a-comp", {
     method: "GET",
   });
   const probeRes = await handlers.getJob(probeReq, "vjob-user-a-comp");
@@ -1261,7 +1261,7 @@ console.log("\n# Section 6: Lightweight Polling, Ingestion Signaling & Signed UR
 
   // 2. Lightweight Polling & Pending Ingestion Signaling
   currentUserId = "user-alpha";
-  const pollProcReq = new Request("https://yourai.test/api/generations/video/vjob-user-a-proc", {
+  const pollProcReq = new Request("https://pixora.test/api/generations/video/vjob-user-a-proc", {
     method: "GET",
   });
   const pollProcRes = await handlers.getJob(pollProcReq, "vjob-user-a-proc");
@@ -1273,7 +1273,7 @@ console.log("\n# Section 6: Lightweight Polling, Ingestion Signaling & Signed UR
   ok(pollDb.signaledJobId === "vjob-user-a-proc", "lightweight GET signals background worker for pending ingestion");
 
   // 3. Completed Job Polling & Authenticated Signed URLs
-  const pollCompReq = new Request("https://yourai.test/api/generations/video/vjob-user-a-comp", {
+  const pollCompReq = new Request("https://pixora.test/api/generations/video/vjob-user-a-comp", {
     method: "GET",
   });
   const pollCompRes = await handlers.getJob(pollCompReq, "vjob-user-a-comp");

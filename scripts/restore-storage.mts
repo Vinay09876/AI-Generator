@@ -18,7 +18,7 @@ import {
 import type { StorageManifest } from "./backup-storage.mjs";
 
 /**
- * YourAI — Supabase Storage Disaster Recovery Restore Utility
+ * Pixora — Supabase Storage Disaster Recovery Restore Utility
  *
  * Hardened Features:
  *  - Symmetric production target protection (`assertSafeStorageRestoreTarget`).
@@ -80,7 +80,7 @@ export function parseArgs(args: string[]): StorageRestoreOptions {
 
 export function printHelp(): void {
   console.log(`
-YourAI Supabase Storage Disaster Recovery Restore Utility
+Pixora Supabase Storage Disaster Recovery Restore Utility
 ========================================================
 
 Verifies and restores objects from an encrypted storage backup into a bucket using safe reconciliation.

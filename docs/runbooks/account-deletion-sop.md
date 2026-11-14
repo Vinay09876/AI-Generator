@@ -1,4 +1,4 @@
-# YourAI Standard Operating Procedure (SOP): Safe Administrative Account Deletion & Ledger Preservation
+# Pixora Standard Operating Procedure (SOP): Safe Administrative Account Deletion & Ledger Preservation
 
 - **Document ID**: SOP-OPS-004
 - **Version**: 1.1.0
@@ -23,7 +23,7 @@
 > This document defines internal systems engineering procedures only. **It does NOT claim, imply, or certify legal compliance with GDPR, CCPA, the Indian Digital Personal Data Protection Act (DPDP), or any other specific data protection or financial regulation.**
 > Operating teams must consult qualified legal counsel before production enforcement.
 
-This Standard Operating Procedure (SOP) governs the manual, administrative decommissioning of user accounts on the YourAI platform. It establishes the mandatory protocol to handle user erasure requests while strictly preserving relational database integrity, double-entry financial auditability, and historical dispute records.
+This Standard Operating Procedure (SOP) governs the manual, administrative decommissioning of user accounts on the Pixora platform. It establishes the mandatory protocol to handle user erasure requests while strictly preserving relational database integrity, double-entry financial auditability, and historical dispute records.
 
 ---
 
@@ -46,7 +46,7 @@ Account decommissioning requests operate at the intersection of user privacy exp
 
 ## 3. Financial Ledger Integrity & Wallet Reconciliation Architecture
 
-The YourAI database schema (`prisma/schema.prisma`) enforces strict relational constraints across user financial ledgers and generation pipelines:
+The Pixora database schema (`prisma/schema.prisma`) enforces strict relational constraints across user financial ledgers and generation pipelines:
 
 ```mermaid
 erDiagram
@@ -59,7 +59,7 @@ erDiagram
 ```
 
 ### Fundamental Accounting Invariant: Ledger Parity
-In the YourAI financial architecture:
+In the Pixora financial architecture:
 $$\text{CreditWallet.balance} \equiv \sum \text{CreditTransaction.amount}$$
 
 - **Zero Silent Overwrites**: Systems operators must **NEVER silently overwrite financial balances** (e.g. raw `UPDATE "CreditWallet" SET balance = 0`) without an accompanying, audited transaction entry. Doing so introduces an irreconcilable discrepancy between the cached wallet balance and the transaction ledger.
@@ -204,7 +204,7 @@ WHERE "userId" = 'TARGET_USER_ID'
 -- 4. Anonymize User identity fields (Tombstoning)
 UPDATE "User"
 SET
-  email = 'anonymized-' || SUBSTRING(MD5(RANDOM()::text || "id"), 1, 12) || '@tombstone.yourai.internal',
+  email = 'anonymized-' || SUBSTRING(MD5(RANDOM()::text || "id"), 1, 12) || '@tombstone.pixora.internal',
   name = 'Anonymized User',
   image = NULL,
   "hashedPassword" = NULL,
@@ -268,7 +268,7 @@ The operator must confirm that PII is eliminated and ledger integrity remains un
    FROM "User"
    WHERE id = 'TARGET_USER_ID';
    ```
-   *Expected Result*: Email ends with `@tombstone.yourai.internal`, name is `Anonymized User`, image and password are `NULL`.
+   *Expected Result*: Email ends with `@tombstone.pixora.internal`, name is `Anonymized User`, image and password are `NULL`.
 
 2. **Ledger Parity & Integrity Check**:
    ```sql

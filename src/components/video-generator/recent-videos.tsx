@@ -103,7 +103,7 @@ export function RecentVideos({ items, selectedJobId, onSelectItem }: RecentVideo
                 {item.asset?.videoUrl && (
                   <a
                     href={item.asset.videoUrl}
-                    download={`yourai-video-${item.job.id.slice(0, 8)}.mp4`}
+                    download={`pixora-video-${item.job.id.slice(0, 8)}.mp4`}
                     onClick={(e) => e.stopPropagation()}
                     title="Download video"
                     className="absolute top-2 right-2 rounded-md bg-black/70 p-1 text-white/80 opacity-0 transition-all hover:bg-black hover:text-white group-hover:opacity-100"

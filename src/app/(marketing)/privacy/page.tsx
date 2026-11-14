@@ -4,7 +4,7 @@ import { LEGAL_ROUTES, ROUTES, SITE } from "@/lib/constants";
 
 export const metadata: Metadata = {
   title: "Privacy Policy",
-  description: "How YourAI collects, processes, and protects your personal data and generation inputs.",
+  description: "How Pixora collects, processes, and protects your personal data and generation inputs.",
 };
 
 export default function PrivacyPolicyPage() {

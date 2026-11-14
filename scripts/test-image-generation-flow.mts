@@ -328,7 +328,7 @@ try {
 
   section("Download helper");
   {
-    ok(assetFilename(JOB) === `yourai-${JOB}.webp` && assetFilename("../x") === "yourai-image.webp", "filename yourai-<jobId>.webp (sanitised)");
+    ok(assetFilename(JOB) === `pixora-${JOB}.webp` && assetFilename("../x") === "pixora-image.webp", "filename pixora-<jobId>.webp (sanitised)");
     ok(isAssetUrl("/api/assets/asset-1") && !isAssetUrl("https://x.supabase.co/storage/v1/object/sign/a") && !isAssetUrl("/api/assets/../secret"), "only same-origin /api/assets/ URLs");
     const clicks: [string, string][] = []; const revoked: string[] = []; const opened: string[] = []; const fetched: string[] = [];
     const deps = {
@@ -340,8 +340,8 @@ try {
       schedule: (fn: () => void) => fn(),
     };
     const r1 = await downloadAsset({ url: "/api/assets/asset-1", jobId: JOB }, deps);
-    ok(r1 === "downloaded" && fetched[0] === "/api/assets/asset-1" && clicks[0][0] === "blob:local/1" && clicks[0][1] === `yourai-${JOB}.webp` && revoked[0] === "blob:local/1",
-      "fetches the asset route as a blob, saves yourai-<jobId>.webp, revokes the object URL");
+    ok(r1 === "downloaded" && fetched[0] === "/api/assets/asset-1" && clicks[0][0] === "blob:local/1" && clicks[0][1] === `pixora-${JOB}.webp` && revoked[0] === "blob:local/1",
+      "fetches the asset route as a blob, saves pixora-<jobId>.webp, revokes the object URL");
     const r2 = await downloadAsset({ url: "/api/assets/asset-1", jobId: JOB }, { ...deps, fetchImpl: async () => { throw new TypeError("CORS"); } });
     ok(r2 === "opened" && opened[0] === "/api/assets/asset-1", "cross-origin read blocked → opens /api/assets/ in a new tab");
     const r3 = await downloadAsset({ url: "/api/assets/asset-1", jobId: JOB }, { ...deps, fetchImpl: async () => new Response("<html>", { headers: { "content-type": "text/html" } }) });

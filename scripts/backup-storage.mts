@@ -32,7 +32,7 @@ import {
 import { requireEnvVars } from "./lib/backup-guard.mjs";
 
 /**
- * YourAI — Production-Grade Supabase Storage Disaster Recovery Utility
+ * Pixora — Production-Grade Supabase Storage Disaster Recovery Utility
  *
  * Hardened Features:
  *  - Concurrent process mutex via atomic lockfile (`.backup.lock`).
@@ -103,7 +103,7 @@ export function parseArgs(args: string[]): StorageBackupOptions {
 
 export function printHelp(): void {
   console.log(`
-YourAI Supabase Storage Disaster Recovery Backup Utility
+Pixora Supabase Storage Disaster Recovery Backup Utility
 ======================================================
 
 Creates an encrypted, verified incremental backup of the private \`generated-assets\` bucket.

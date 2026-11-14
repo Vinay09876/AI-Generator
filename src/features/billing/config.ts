@@ -62,7 +62,7 @@ export const PROVISIONAL_WHOLESALE_COSTS = {
  * Configurable via environment variables or runtime configuration.
  */
 export const INVOICE_CONFIG_DEFAULTS = {
-  supplierLegalName: process.env.INVOICE_SUPPLIER_NAME ?? "YourAI (Trading Platform)",
+  supplierLegalName: process.env.INVOICE_SUPPLIER_NAME ?? "Pixora (Trading Platform)",
   supplierAddress: process.env.INVOICE_SUPPLIER_ADDRESS ?? "Operations & Cloud Infrastructure",
   /**
    * Verified supplier GSTIN. Null until statutory registration.

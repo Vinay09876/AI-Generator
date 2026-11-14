@@ -80,7 +80,7 @@ export function Hero() {
             custom={0.75}
             className="mx-auto mt-6 max-w-2xl text-base leading-relaxed text-pretty text-muted sm:text-lg"
           >
-            YourAI brings AI image generation, AI video generation and smart video clipping into one
+            Pixora brings AI image generation, AI video generation and smart video clipping into one
             focused workspace. Describe your idea, iterate quickly, and export content that is ready to
             publish.
           </motion.p>

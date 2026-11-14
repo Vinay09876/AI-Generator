@@ -54,7 +54,7 @@ export function Benefits() {
     <section id="benefits" className="relative py-24 sm:py-32">
       <div className="mx-auto max-w-6xl px-4 sm:px-6">
         <SectionHeading
-          eyebrow="Why YourAI"
+          eyebrow="Why Pixora"
           title={
             <>
               Built for creators who <span className="text-gradient">ship often</span>

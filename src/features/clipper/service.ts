@@ -124,7 +124,7 @@ async function signClipDownload(userId: string, jobId: string, assetId: string):
   if (!asset || !isClipKeyOwnedBy(asset.storageKey, userId)) return null;
   // Rendered clips are always MP4 (H.264/AAC).
   return getClipperStorage().createSignedUrl(asset.storageKey, CLIPPER_DOWNLOAD_URL_EXPIRY_SECONDS, {
-    download: `yourai-clip-${assetId.slice(0, 12)}.mp4`,
+    download: `pixora-clip-${assetId.slice(0, 12)}.mp4`,
   });
 }
 

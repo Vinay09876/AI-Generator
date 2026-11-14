@@ -6,7 +6,7 @@ import { DEFAULT_DAILY_USER_VIDEO_LIMIT, DEFAULT_VIDEO_CREDIT_COST } from "@/fea
 
 export const metadata: Metadata = {
   title: "Terms of Service",
-  description: "Terms and conditions governing your access to and use of YourAI.",
+  description: "Terms and conditions governing your access to and use of Pixora.",
 };
 
 export default function TermsOfServicePage() {

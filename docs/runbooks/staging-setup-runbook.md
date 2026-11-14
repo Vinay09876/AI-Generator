@@ -1,4 +1,4 @@
-# YourAI Staging Configuration, Migration & Verification Runbook
+# Pixora Staging Configuration, Migration & Verification Runbook
 
 - **Document ID**: RUNBOOK-STAGING-001
 - **Version**: 1.0.0
@@ -10,7 +10,7 @@
 
 ## 1. Overview & Architecture Boundaries
 
-This runbook provides the definitive operational blueprint for provisioning, configuring, and verifying the **YourAI Staging Environment** with Stage 8 Video Generation capabilities.
+This runbook provides the definitive operational blueprint for provisioning, configuring, and verifying the **Pixora Staging Environment** with Stage 8 Video Generation capabilities.
 
 ### Strict Operational Principles:
 1. **Separation of Configuration vs. Verification**: Every configuration section is paired with an independent, non-destructive verification command to confirm success before proceeding.
@@ -58,7 +58,7 @@ flowchart TD
 | `MIGRATE_DATABASE_URL` | Optional. Prisma CLI only (`migrate deploy/status`); schema-engine TLS parameters. Must name the same database as `DATABASE_URL`, otherwise the CLI refuses to run (`prisma/cli-database-url.ts`). Not used at build time. | **SECRET** | `...?sslmode=require&sslcert=<CA path>&sslaccept=strict` | Falls back to `DATABASE_URL` |
 | `AUTH_SECRET` | Secret key for signing Auth.js session JWT tokens. | **SECRET** | 64-char hex (`openssl rand -hex 32`) | None (Required) |
 | `AUTH_TRUST_HOST` / `AUTH_URL` | One is required in production: `AUTH_TRUST_HOST=true` behind a proxy, or the canonical `AUTH_URL`. | Config | `true` | None (Required) |
-| `APP_ORIGIN` | Public canonical staging URL for CSRF validation. | Public | `https://staging.yourai.internal` | None (Required) |
+| `APP_ORIGIN` | Public canonical staging URL for CSRF validation. | Public | `https://staging.pixora.internal` | None (Required) |
 | `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_AI_API_TOKEN` | Workers AI credentials for image generation. | **SECRET** (token) | — | None (Required) |
 | `CRON_SECRET` | Bearer token for all three cron endpoints (§6). | **SECRET** | 64-char hex (`openssl rand -hex 32`) | None (Required; startup fails without it) |
 | `FAL_KEY` | Fal.ai API key for queue submission and model inference. | **SECRET** | `fal_key_...` | None (Required when `STAGE_8_QA_ALLOWLIST` is set) |
@@ -326,7 +326,7 @@ User generations and uploads contain private user content and must never be expo
 
 ## 6. External Cron Heartbeat Scheduling
 
-YourAI does not require expensive managed message queues (AWS SQS, Upstash, BullMQ). Background recovery is triggered by periodic authenticated HTTP GET requests. **Three endpoints must be scheduled**; all use the same `CRON_SECRET` and all fail closed (401) when it is unset in production.
+Pixora does not require expensive managed message queues (AWS SQS, Upstash, BullMQ). Background recovery is triggered by periodic authenticated HTTP GET requests. **Three endpoints must be scheduled**; all use the same `CRON_SECRET` and all fail closed (401) when it is unset in production.
 
 | Endpoint | Schedule | What it does | Needed when |
 | :--- | :--- | :--- | :--- |
@@ -345,13 +345,13 @@ The clipper also needs its **worker process** (it is not an HTTP endpoint): run 
 ### Configuration Procedure
 
 Configure an external cron scheduler (e.g. GitHub Actions, Cloudflare Cron Triggers, cron-job.org, or AWS EventBridge) for each endpoint in the table above:
-- **Target URLs**: `https://staging.yourai.internal/api/cron/video-webhooks`, `.../api/cron/clipper`, `.../api/cron/billing`
+- **Target URLs**: `https://staging.pixora.internal/api/cron/video-webhooks`, `.../api/cron/clipper`, `.../api/cron/billing`
 - **HTTP Method**: `GET`
 - **Schedule**: as in the table (every 1–5 minutes for video, 5 minutes for clipper, 5–15 minutes for billing)
 - **Headers**:
   ```http
   Authorization: Bearer <CRON_SECRET>
-  User-Agent: YourAI-Cron-Trigger/1.0
+  User-Agent: Pixora-Cron-Trigger/1.0
   ```
 
 #### Example GitHub Actions Workflow (`.github/workflows/cron-heartbeat.yml`)
@@ -368,7 +368,7 @@ jobs:
         run: |
           for path in video-webhooks clipper billing; do
             curl -f -s -H "Authorization: Bearer ${{ secrets.STAGING_CRON_SECRET }}" \
-              "https://staging.yourai.internal/api/cron/$path"
+              "https://staging.pixora.internal/api/cron/$path"
           done
 ```
 
@@ -378,13 +378,13 @@ jobs:
 
 1. **Test Unauthenticated Rejection**:
    ```bash
-   curl -i https://staging.yourai.internal/api/cron/video-webhooks
+   curl -i https://staging.pixora.internal/api/cron/video-webhooks
    ```
    *Expected Response*: `HTTP/1.1 401 Unauthorized` (`{"error":"Unauthorized"}`).
 
 2. **Test Authenticated Execution**:
    ```bash
-   curl -i -H "Authorization: Bearer <CRON_SECRET>" https://staging.yourai.internal/api/cron/video-webhooks
+   curl -i -H "Authorization: Bearer <CRON_SECRET>" https://staging.pixora.internal/api/cron/video-webhooks
    ```
    *Expected Response*: `HTTP/1.1 200 OK`
    ```json
@@ -411,7 +411,7 @@ Fal.ai requires a publicly accessible HTTPS endpoint to deliver asynchronous vid
 ### Configuration Procedure
 
 1. **Determine Public Ingress URL**:
-   - In Staging: `https://staging.yourai.internal/api/webhooks/video/fal`
+   - In Staging: `https://staging.pixora.internal/api/webhooks/video/fal`
    - In Local / Preview Testing: Use a secure tunnel:
      ```bash
      # Cloudflare Tunnel
@@ -429,7 +429,7 @@ Fal.ai requires a publicly accessible HTTPS endpoint to deliver asynchronous vid
 1. **Verify Ed25519 Rejection of Forged Webhooks**:
    Send an unsigned POST request to the webhook endpoint:
    ```bash
-   curl -i -X POST "https://staging.yourai.internal/api/webhooks/video/fal?jobId=vjob-test" \
+   curl -i -X POST "https://staging.pixora.internal/api/webhooks/video/fal?jobId=vjob-test" \
      -H "Content-Type: application/json" \
      -d '{"status":"OK"}'
    ```
@@ -438,7 +438,7 @@ Fal.ai requires a publicly accessible HTTPS endpoint to deliver asynchronous vid
 2. **Verify Correlation Token Enforcement**:
    Send a request with an invalid or tampered correlation token:
    ```bash
-   curl -i -X POST "https://staging.yourai.internal/api/webhooks/video/fal?jobId=vjob-test&token=invalid-token" \
+   curl -i -X POST "https://staging.pixora.internal/api/webhooks/video/fal?jobId=vjob-test&token=invalid-token" \
      -H "Content-Type: application/json" \
      -d '{"status":"OK"}'
    ```

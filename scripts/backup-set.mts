@@ -26,7 +26,7 @@ import { runDatabaseBackup } from "./backup-db.mjs";
 import { runStorageBackup, type StorageManifest } from "./backup-storage.mjs";
 
 /**
- * YourAI — Coordinated Disaster Recovery Backup-Set Utility
+ * Pixora — Coordinated Disaster Recovery Backup-Set Utility
  *
  * Consistency Architecture & Strict Invariants:
  *  1. Capture Database Backup FIRST ($T_1$).
@@ -101,7 +101,7 @@ export function parseArgs(args: string[]): BackupSetOptions {
 
 export function printHelp(): void {
   console.log(`
-YourAI Coordinated Disaster Recovery Backup-Set Utility
+Pixora Coordinated Disaster Recovery Backup-Set Utility
 ======================================================
 
 Creates an atomic, consistent backup set pairing a PostgreSQL database dump with the exact

@@ -28,7 +28,7 @@ import {
 } from "./lib/backup-guard.mjs";
 
 /**
- * YourAI — PostgreSQL Disaster Recovery Restore Utility (Hardened Two-Pass Streaming)
+ * Pixora — PostgreSQL Disaster Recovery Restore Utility (Hardened Two-Pass Streaming)
  *
  * Safety & Security Invariants:
  *  1. Two-Pass Streaming Decryption:
@@ -84,7 +84,7 @@ export function parseArgs(args: string[]): RestoreOptions {
 
 export function printHelp(): void {
   console.log(`
-YourAI PostgreSQL Disaster Recovery Restore Utility
+Pixora PostgreSQL Disaster Recovery Restore Utility
 ===================================================
 
 Restores an encrypted or unencrypted PostgreSQL custom-format backup using two-pass streaming.

@@ -36,7 +36,7 @@ const FEATURES: Feature[] = [
     icon: Video,
     title: "AI Video Generator",
     description:
-      "Bring scenes to life with short AI-generated videos. Describe the motion, mood and camera, and let YourAI render it.",
+      "Bring scenes to life with short AI-generated videos. Describe the motion, mood and camera, and let Pixora render it.",
     points: ["Text-to-video from a prompt", "Control duration & framing", "Export for social and web"],
     href: ROUTES.aiVideo,
     glow: "232 121 249",

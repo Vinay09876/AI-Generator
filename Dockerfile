@@ -1,8 +1,8 @@
 # ==============================================================================
-# YourAI — Production Multi-Stage Dockerfile (Next.js 16 Standalone + Clipper worker)
+# Pixora — Production Multi-Stage Dockerfile (Next.js 16 Standalone + Clipper worker)
 #
-#   Web app (default target):   docker build -t yourai-web .
-#   Clipper worker:             docker build --target clipper-worker -t yourai-clipper-worker .
+#   Web app (default target):   docker build -t pixora-web .
+#   Clipper worker:             docker build --target clipper-worker -t pixora-clipper-worker .
 #
 # No secrets are needed or allowed at build time: .dockerignore keeps .env*, certificates and
 # keys out of the build context, and the builder stage fails if any .env file reaches the
@@ -55,7 +55,7 @@ RUN apk add --no-cache libc6-compat openssl ffmpeg
 WORKDIR /app
 
 ENV NODE_ENV=production
-ENV CLIPPER_SCRATCH_DIR=/tmp/yourai-clipper
+ENV CLIPPER_SCRATCH_DIR=/tmp/pixora-clipper
 
 RUN addgroup --system --gid 1001 nodejs && \
     adduser --system --uid 1001 worker

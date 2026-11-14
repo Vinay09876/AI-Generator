@@ -26,7 +26,7 @@ const ok = (c: boolean, m: string) => {
 };
 
 const SECRET = "cron-secret-0123456789abcdef";
-const URL_ = "https://yourai.test/api/cron/video-webhooks";
+const URL_ = "https://pixora.test/api/cron/video-webhooks";
 const req = (auth?: string) => new Request(URL_, { method: "GET", headers: auth ? { authorization: auth } : {} });
 
 const env = process.env as Record<string, string | undefined>;
