@@ -1,0 +1,87 @@
+# Pixora production cron scheduler (Milestone 4, Work Item 4).
+#
+# Calls the existing authenticated cron endpoints of the production Render service. No checkout,
+# no third-party actions, no repository access (permissions: {}). See
+# docs/runbooks/staging-setup-runbook.md §6.
+#
+#   17 * * * *   -> health check, then /api/cron/billing
+#   41 3 * * *   -> health check, then /api/cron/video-webhooks and /api/cron/clipper
+#   manual run   -> health check, then all three
+#
+# Requires the repository secret PROD_CRON_SECRET (same value as Render's CRON_SECRET).
+name: Production cron
+
+on:
+  schedule:
+    - cron: "17 * * * *"
+    - cron: "41 3 * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: production-cron
+  cancel-in-progress: false
+
+jobs:
+  cron:
+    name: Health check and cron endpoints
+    if: github.repository == 'Vinay09876/AI-Generator'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      BASE_URL: https://pixora-production.onrender.com
+    steps:
+      - name: Select endpoints for this trigger
+        id: select
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          SCHEDULE: ${{ github.event.schedule }}
+        run: |
+          case "$EVENT_NAME|$SCHEDULE" in
+            "schedule|17 * * * *") endpoints="billing" ;;
+            "schedule|41 3 * * *") endpoints="video-webhooks clipper" ;;
+            "workflow_dispatch|"*) endpoints="billing video-webhooks clipper" ;;
+            *) echo "::error::Unexpected trigger: $EVENT_NAME"; exit 1 ;;
+          esac
+          echo "endpoints=$endpoints" >> "$GITHUB_OUTPUT"
+          echo "Endpoints for this run: $endpoints"
+
+      - name: Health check (wakes the Render instance)
+        shell: bash
+        run: |
+          # Retries absorb Render free-tier cold starts. Body discarded; status only.
+          code=$(curl --fail --silent --show-error --output /dev/null --write-out '%{http_code}' \
+            --max-time 120 --retry 3 --retry-delay 20 --retry-all-errors \
+            "$BASE_URL/api/health") || {
+            echo "::error::health check failed (HTTP ${code:-000}); cron endpoints were not called"
+            exit 1
+          }
+          echo "health: HTTP $code"
+
+      - name: Call cron endpoints
+        shell: bash
+        env:
+          CRON_SECRET: ${{ secrets.PROD_CRON_SECRET }}
+          ENDPOINTS: ${{ steps.select.outputs.endpoints }}
+        run: |
+          if [ -z "${CRON_SECRET}" ]; then
+            echo "::error::Repository secret PROD_CRON_SECRET is not set; no cron endpoint was called"
+            exit 1
+          fi
+          failed=0
+          for name in $ENDPOINTS; do
+            # The Authorization header is written by the printf builtin to curl's stdin (-H @-), so
+            # the secret never appears in a process argument list or in the log. No retries: a cron
+            # call must not overlap with a retried copy of itself. Body discarded; status only.
+            code=$(printf 'Authorization: Bearer %s\n' "$CRON_SECRET" \
+              | curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
+                  --max-time 120 --header @- "$BASE_URL/api/cron/$name") || code="${code:-000}"
+            echo "$name: HTTP $code"
+            case "$code" in
+              2??) ;;
+              *) echo "::error::$name returned HTTP $code"; failed=1 ;;
+            esac
+          done
+          exit "$failed"

@@ -328,11 +328,13 @@ User generations and uploads contain private user content and must never be expo
 
 Pixora does not require expensive managed message queues (AWS SQS, Upstash, BullMQ). Background recovery is triggered by periodic authenticated HTTP GET requests. **Three endpoints must be scheduled**; all use the same `CRON_SECRET` and all fail closed (401) when it is unset in production.
 
-| Endpoint | Schedule | What it does | Needed when |
+| Endpoint | Production schedule now | Schedule once the feature is enabled | What it does |
 | :--- | :--- | :--- | :--- |
-| `/api/cron/video-webhooks` | every 1–5 min | Sweeps expired webhook leases, processes the Fal.ai webhook outbox, ingests ready results, reconciles stale video jobs (refunds) | Video enabled |
-| `/api/cron/clipper` | every 5 min | Reconciles stale clip jobs (refunds), retries failed ephemeral-object cleanups, sweeps expired uploads | Clipper enabled |
-| `/api/cron/billing` | every 5–15 min | Retries stored payment webhook events left PENDING (or with expired leases) and reconciles stuck payment orders. Database-only; makes no gateway calls. A no-op while purchases are disabled | Always (harmless) |
+| `/api/cron/billing` | hourly at :17 UTC | every 15 min (purchases enabled) | Retries stored payment webhook events left PENDING (or with expired leases) and reconciles stuck payment orders. Database-only; makes no gateway calls. A no-op while purchases are disabled |
+| `/api/cron/video-webhooks` | daily at 03:41 UTC | every 5 min (video enabled) | Sweeps expired webhook leases, processes the Fal.ai webhook outbox, ingests ready results, reconciles stale video jobs (refunds). A no-op while video is disabled |
+| `/api/cron/clipper` | daily at 03:41 UTC | every 15 min (clipper enabled) | Reconciles stale clip jobs (refunds), retries failed ephemeral-object cleanups, sweeps expired uploads. A no-op while clipper is disabled (one Storage listing per run) |
+
+All three are safe to call repeatedly (atomic claims, leases and guarded state transitions). While video, clipper and payments are disabled the scheduled calls mainly prove that `CRON_SECRET` and the database path still work.
 
 Image jobs have no cron: a stale image job is reconciled (and its credit refunded) the next time the same user generates or polls.
 
@@ -344,33 +346,18 @@ The clipper also needs its **worker process** (it is not an HTTP endpoint): run 
 
 ### Configuration Procedure
 
-Configure an external cron scheduler (e.g. GitHub Actions, Cloudflare Cron Triggers, cron-job.org, or AWS EventBridge) for each endpoint in the table above:
-- **Target URLs**: `https://staging.pixora.internal/api/cron/video-webhooks`, `.../api/cron/clipper`, `.../api/cron/billing`
-- **HTTP Method**: `GET`
-- **Schedule**: as in the table (every 1–5 minutes for video, 5 minutes for clipper, 5–15 minutes for billing)
-- **Headers**:
-  ```http
-  Authorization: Bearer <CRON_SECRET>
-  User-Agent: Pixora-Cron-Trigger/1.0
-  ```
+Production is scheduled by the GitHub Actions workflow **`.github/workflows/production-cron.yml`** (₹0, no third-party actions, no checkout):
+- **Target**: `https://pixora-production.onrender.com/api/cron/<billing|video-webhooks|clipper>`
+- **HTTP Method**: `GET`, header `Authorization: Bearer <CRON_SECRET>`, no body.
+- **Triggers**: `17 * * * *` → health check + `billing`; `41 3 * * *` → health check + `video-webhooks` + `clipper`; `workflow_dispatch` (manual) → health check + all three.
+- **Health check first**: `GET /api/health` with retries (absorbs Render free-tier cold starts). If it fails, no cron endpoint is called.
+- **Secret**: repository secret **`PROD_CRON_SECRET`** (same value as Render's `CRON_SECRET`). It is passed via the step environment and fed to curl on stdin (`-H @-`), never on a command line or in logs. The run fails with a clear error if the secret is missing.
+- **No retries for cron calls** (avoids overlapping runs); response bodies are discarded; the log shows only the endpoint name and HTTP status; any non-2xx status fails the run (GitHub emails the failure).
+- **Safety**: `permissions: {}`, concurrency group `production-cron` (no overlap), 15-minute job timeout, runs only in `Vinay09876/AI-Generator` (not forks).
 
-#### Example GitHub Actions Workflow (`.github/workflows/cron-heartbeat.yml`)
-```yaml
-name: Video Background Heartbeat
-on:
-  schedule:
-    - cron: '*/5 * * * *'  # Every 5 minutes
-jobs:
-  heartbeat:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Trigger Cron Worker
-        run: |
-          for path in video-webhooks clipper billing; do
-            curl -f -s -H "Authorization: Bearer ${{ secrets.STAGING_CRON_SECRET }}" \
-              "https://staging.pixora.internal/api/cron/$path"
-          done
-```
+Operator setup: add the repository secret `PROD_CRON_SECRET` (Settings → Secrets and variables → Actions), push the workflow, then run it once via **Actions → Production cron → Run workflow** and confirm `health`, `billing`, `video-webhooks` and `clipper` all log `HTTP 200`.
+
+Budget notes (₹0): each run bills at least one GitHub Actions minute (Free plan, private repo: 2,000 min/month); the hourly + daily schedule uses about 750 runs/month. Every ping also wakes the Render free instance for ~15 minutes, so do not schedule more often than needed; raise the cadences in the table only when the corresponding feature is enabled. GitHub may delay or skip scheduled runs under load; every endpoint catches up on its next run.
 
 ---
 
