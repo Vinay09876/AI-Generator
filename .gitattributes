@@ -1,0 +1,3 @@
+# Prisma records a SHA-256 of each migration.sql when it is applied. A CRLF checkout (core.autocrlf=true)
+# changes those bytes and the checksum, so SQL files are always checked out with LF.
+*.sql text eol=lf
