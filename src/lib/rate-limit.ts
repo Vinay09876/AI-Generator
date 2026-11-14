@@ -91,6 +91,22 @@ export class InMemoryRateLimiter {
     };
   }
 
+  /**
+   * Read-only check: would the NEXT hit for `key` be refused? Records nothing, so it can gate an
+   * expensive operation (e.g. a bcrypt comparison) where only failures should be counted.
+   */
+  peek(key: string, config: RateLimitConfig, now = Date.now()): RateLimitResult {
+    const windowStart = now - config.windowMs;
+    const hits = (this.store.get(key)?.timestamps ?? []).filter((ts) => ts > windowStart);
+    const resetAt = hits.length ? hits[0] + config.windowMs : now;
+    return {
+      allowed: hits.length < config.max,
+      remaining: Math.max(0, config.max - hits.length),
+      resetAt,
+      retryAfterSeconds: Math.max(1, Math.ceil((resetAt - now) / 1000)),
+    };
+  }
+
   /** Reset a specific key (e.g. after successful authentication or in tests). */
   reset(key: string) {
     this.store.delete(key);
@@ -133,10 +149,33 @@ export const RATE_LIMITS = {
   LOGIN_ACCOUNT: { max: 5, windowMs: 15 * 60 * 1000 },
   /** Generation Burst: 10 requests per minute per IP (Postgres enforces daily 10/day). */
   GENERATION_BURST: { max: 10, windowMs: 60 * 1000 },
+  /** Image generation burst per authenticated user (not spoofable; Postgres still enforces the daily quota). */
+  GENERATION_USER: { max: 10, windowMs: 60 * 1000 },
+  /**
+   * Failure COUNTER window per normalized email (not a hard limit): authorize() turns the count into
+   * progressive per-account spacing (src/features/auth/authorize.ts). `max` only bounds memory.
+   */
+  LOGIN_ACCOUNT_FAILURES: { max: 1000, windowMs: 15 * 60 * 1000 },
+  /** Site-wide cap on SUCCESSFUL registrations (applies even when no client IP can be trusted). */
+  REGISTER_GLOBAL: { max: 100, windowMs: 60 * 60 * 1000 },
+  /** Abuse reports: signed-in reporter. */
+  REPORT_USER: { max: 10, windowMs: 60 * 60 * 1000 },
+  /** Anonymous abuse reports per trusted client IP (only when a trusted IP exists). */
+  REPORT_ANON_IP: { max: 10, windowMs: 60 * 60 * 1000 },
+  /** Anonymous abuse reports per reported target (duplicates of an already-queued report add nothing). */
+  REPORT_ANON_TARGET: { max: 3, windowMs: 60 * 60 * 1000 },
+  /** Site-wide anonymous report circuit breaker (bounds database spam). */
+  REPORT_ANON_GLOBAL: { max: 60, windowMs: 60 * 60 * 1000 },
 } as const;
 
 /** Shared process-local rate limiter instance. */
 export const defaultRateLimiter = new InMemoryRateLimiter();
+
+/**
+ * Separate instance for authentication counters, so key floods on other endpoints (each limiter
+ * evicts its oldest key at maxEntries) can never flush sign-in failure counters.
+ */
+export const authRateLimiter = new InMemoryRateLimiter();
 
 // ---------------------------------------------------------------------------
 // Client IP Extraction & Trust Boundary
@@ -218,4 +257,28 @@ export function extractClientIp(
   // do NOT trust X-Forwarded-For, X-Real-IP, or untrusted CF-Connecting-IP.
   // Fall back to the safe constant default.
   return "127.0.0.1";
+}
+
+/**
+ * The client IP ONLY when it comes from the explicitly trusted proxy model; otherwise null.
+ *
+ * Prefer this over extractClientIp() for rate-limit keys: the constant "127.0.0.1" fallback turns a
+ * per-IP limit into ONE site-wide bucket that any single client can exhaust for everyone (e.g. 10
+ * sign-ins per 15 minutes for the whole site). Callers skip per-IP limits when this returns null and
+ * rely on per-account / per-user / per-target limits instead.
+ *
+ * Render: requests reach the service through Cloudflare. Render appends to (does not reset) a
+ * client-supplied X-Forwarded-For, so XFF is never trusted. CF-Connecting-IP is only honored under
+ * TRUST_PROXY=cloudflare, which must not be set until the boundary is validated (see
+ * docs/runbooks/client-ip-trust.md).
+ */
+export function trustedClientIp(
+  headers: Headers | Record<string, string | string[] | undefined>,
+  options: ExtractClientIpOptions = {},
+): string | null {
+  const trustModel: ClientIpTrustModel =
+    options.trustModel ?? (process.env.TRUST_PROXY === "cloudflare" ? "cloudflare" : "none");
+  if (trustModel !== "cloudflare") return null;
+  const ip = extractClientIp(headers, { trustModel });
+  return ip === "127.0.0.1" ? null : ip;
 }

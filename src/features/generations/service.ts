@@ -48,5 +48,5 @@ export const generationHandlers = createGenerationHandlers({
     }),
   reconcileGlobal: () => lifecycle.reconcileStaleJobs({ limit: 10 }),
   signAssetUrl: (userId, assetId) => getSignedAssetUrl({ userId, assetId, storage: getObjectStorage() }),
-  checkRateLimit: (key) => defaultRateLimiter.check(key, RATE_LIMITS.GENERATION_BURST),
+  checkRateLimit: (key) => defaultRateLimiter.check(key, RATE_LIMITS.GENERATION_USER),
 });

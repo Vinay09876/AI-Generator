@@ -1,5 +1,4 @@
 import { errorResponse, isPlainObject, isTrustedOrigin, jsonResponse, readJsonBody } from "@/lib/api";
-import { extractClientIp } from "@/lib/rate-limit";
 import { GENERATION_REQUEST_MAX_BODY_BYTES } from "./config";
 import type { AccountingErrorCode } from "./errors";
 import type { GenerationRunResult } from "./generate-image";
@@ -110,10 +109,11 @@ export function createGenerationHandlers(deps: GenerationHttpDeps) {
       const userId = await deps.getUserId();
       if (!userId) return unauthenticated();
 
-      // Process-local burst throttling (best-effort; Postgres enforces authoritative limits)
+      // Process-local burst throttling per authenticated user (best-effort; Postgres enforces the
+      // authoritative daily quota and one-active-job limit). Keyed by user, not IP: without a
+      // trusted proxy every request shares one fallback IP, which made this a site-wide bucket.
       if (deps.checkRateLimit) {
-        const ip = extractClientIp(request.headers);
-        const limitCheck = deps.checkRateLimit(`gen:ip:${ip}`);
+        const limitCheck = deps.checkRateLimit(`gen:user:${userId}`);
         if (!limitCheck.allowed) {
           return errorResponse(
             429,

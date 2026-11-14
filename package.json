@@ -85,6 +85,7 @@
     "backup:set": "tsx scripts/backup-set.mts",
     "restore:set": "tsx scripts/restore-set.mts",
     "build:worker": "node scripts/build-clipper-worker.mjs",
-    "test:post-s8": "tsx scripts/test-post-s8-remediation.mts"
+    "test:post-s8": "tsx scripts/test-post-s8-remediation.mts",
+    "test:security": "tsx scripts/test-security-hardening.mts"
   }
 }

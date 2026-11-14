@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { defaultRateLimiter } from "@/lib/rate-limit";
-import { isTrustedOrigin, resolveTrustedOrigins } from "@/lib/api";
+import { defaultRateLimiter, RATE_LIMITS, trustedClientIp, type RateLimitConfig } from "@/lib/rate-limit";
+import { isPlainObject, isTrustedOrigin, readJsonBody, resolveTrustedOrigins } from "@/lib/api";
 import {
   submitAbuseReport,
   InvalidAbuseReportError,
@@ -14,6 +14,11 @@ export interface ReportHandlerDeps {
   trustedOrigins?: () => readonly string[];
   dbClient?: any;
 }
+
+/** Reports are small: details are capped at 2000 characters by the service. */
+const REPORT_MAX_BODY_BYTES = 8 * 1024;
+/** Job, asset and user ids are cuid-style identifiers. */
+const TARGET_ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
 
 const VALID_CATEGORIES: AbuseReportCategory[] = [
   "csam",
@@ -56,28 +61,47 @@ export async function handleAbuseReportRequest(
     }
   }
 
-  // 3. Rate Limiting Check (10 reports/hour)
-  const rateLimitKey = userId ? `moderation:report:${userId}` : "moderation:report:anon";
-  const rateLimit = defaultRateLimiter.check(rateLimitKey, {
-    max: 10,
-    windowMs: 60 * 60_000,
-  });
-  if (!rateLimit.allowed) {
+  // 3. Parse the payload with a hard size cap (this endpoint accepts anonymous traffic).
+  const parsedBody = await readJsonBody(request, REPORT_MAX_BODY_BYTES);
+  if (!parsedBody.ok) {
+    return parsedBody.reason === "TOO_LARGE"
+      ? NextResponse.json({ error: "Request body is too large", code: "PAYLOAD_TOO_LARGE" }, { status: 413 })
+      : NextResponse.json({ error: "Invalid JSON payload", code: "BAD_REQUEST" }, { status: 400 });
+  }
+  if (!isPlainObject(parsedBody.value)) {
+    return NextResponse.json({ error: "Invalid JSON payload", code: "BAD_REQUEST" }, { status: 400 });
+  }
+  const body = parsedBody.value as Record<string, unknown>;
+  const { targetType, targetId, category, details, reporterEmail } = body as any;
+
+  if (typeof targetId !== "string" || !TARGET_ID_PATTERN.test(targetId)) {
+    return NextResponse.json({ error: "targetId is invalid", code: "INVALID_TARGET_ID" }, { status: 400 });
+  }
+  if (reporterEmail !== undefined && reporterEmail !== null && (typeof reporterEmail !== "string" || reporterEmail.length > 254)) {
+    return NextResponse.json({ error: "reporterEmail is invalid", code: "INVALID_REPORTER_EMAIL" }, { status: 400 });
+  }
+
+  // 4. Rate limiting. Signed-in: per user. Anonymous: per trusted client IP (only when a trusted
+  // proxy supplies one), per reported target, and a site-wide cap; never one shared anonymous
+  // bucket that a single client could exhaust for everyone. All limits are checked before any is
+  // recorded, so a refused report does not consume the other budgets.
+  const limits: [string, RateLimitConfig][] = userId
+    ? [[`moderation:report:user:${userId}`, RATE_LIMITS.REPORT_USER]]
+    : [
+        ...(() => {
+          const ip = trustedClientIp(request.headers);
+          return ip ? [[`moderation:report:anon:ip:${ip}`, RATE_LIMITS.REPORT_ANON_IP] as [string, RateLimitConfig]] : [];
+        })(),
+        [`moderation:report:anon:target:${String(targetType)}:${targetId}`, RATE_LIMITS.REPORT_ANON_TARGET],
+        ["moderation:report:anon:global", RATE_LIMITS.REPORT_ANON_GLOBAL],
+      ];
+  if (limits.some(([key, cfg]) => !defaultRateLimiter.peek(key, cfg).allowed)) {
     return NextResponse.json(
       { error: "Too many abuse reports submitted. Please wait before reporting again.", code: "RATE_LIMITED" },
       { status: 429 },
     );
   }
-
-  // 4. Parse & Validate Payload
-  let body: any;
-  try {
-    body = await request.json();
-  } catch {
-    return NextResponse.json({ error: "Invalid JSON payload", code: "BAD_REQUEST" }, { status: 400 });
-  }
-
-  const { targetType, targetId, category, details, reporterEmail } = body;
+  for (const [key, cfg] of limits) defaultRateLimiter.check(key, cfg);
 
   if (!["JOB", "ASSET", "USER"].includes(targetType)) {
     return NextResponse.json(

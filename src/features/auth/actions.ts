@@ -6,8 +6,9 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { signIn, signOut } from "@/lib/auth";
 import { DEFAULT_LOGIN_REDIRECT, ROUTES } from "@/lib/constants";
-import { defaultRateLimiter, extractClientIp, RATE_LIMITS } from "@/lib/rate-limit";
+import { authRateLimiter, RATE_LIMITS, trustedClientIp } from "@/lib/rate-limit";
 import { hashPassword } from "@/features/auth/password";
+import { createAccountWithThrottle } from "@/features/auth/register-throttle";
 import { safeRedirectPath } from "@/features/auth/redirect";
 import { loginSchema, registerSchema } from "@/features/auth/schemas";
 import { createUserWithWallet, EmailAlreadyRegisteredError } from "@/features/users/create-user";
@@ -34,22 +35,22 @@ export async function registerAction(_prev: AuthFormState, formData: FormData): 
     return { fieldErrors: z.flattenError(parsed.error).fieldErrors, values };
   }
 
-  // Best-effort process-local rate limiting on registration
-  const reqHeaders = await headers();
-  const ip = extractClientIp(reqHeaders);
-  const limitCheck = defaultRateLimiter.check(`register:ip:${ip}`, RATE_LIMITS.REGISTER_IP);
-  if (!limitCheck.allowed) {
-    return {
-      error: `Too many registration attempts. Please wait ${limitCheck.retryAfterSeconds} seconds before trying again.`,
-      values,
-    };
-  }
-
   const { name, email, password } = parsed.data;
 
+  // Best-effort process-local registration budget (per trusted client IP, plus a site-wide cap)
+  // that counts ONLY successfully created accounts: invalid input returned above, and a duplicate
+  // email or failed creation throws before anything is recorded (src/features/auth/register-throttle.ts).
   try {
-    const passwordHash = await hashPassword(password);
-    await createUserWithWallet({ name, email, passwordHash });
+    const result = await createAccountWithThrottle(trustedClientIp(await headers()), async () => {
+      const passwordHash = await hashPassword(password);
+      return createUserWithWallet({ name, email, passwordHash });
+    });
+    if (!result.ok) {
+      return {
+        error: `Too many new accounts are being created right now. Please wait ${result.retryAfterSeconds} seconds before trying again.`,
+        values,
+      };
+    }
   } catch (error) {
     if (error instanceof EmailAlreadyRegisteredError) {
       return { fieldErrors: { email: [error.message] }, values };
@@ -84,24 +85,18 @@ export async function loginAction(_prev: AuthFormState, formData: FormData): Pro
     return { fieldErrors: { email: fieldErrors.email, password: fieldErrors.password }, values };
   }
 
-  // Best-effort process-local rate limiting on login (both IP and normalized account identifier)
-  const reqHeaders = await headers();
-  const ip = extractClientIp(reqHeaders);
-  const ipCheck = defaultRateLimiter.check(`login:ip:${ip}`, RATE_LIMITS.LOGIN_IP);
-  if (!ipCheck.allowed) {
-    return {
-      error: `Too many sign-in attempts from this network. Please wait ${ipCheck.retryAfterSeconds} seconds before trying again.`,
-      values,
-    };
-  }
-
-  const normalizedEmail = parsed.data.email.trim().toLowerCase();
-  const accountCheck = defaultRateLimiter.check(`login:account:${normalizedEmail}`, RATE_LIMITS.LOGIN_ACCOUNT);
-  if (!accountCheck.allowed) {
-    return {
-      error: `Too many sign-in attempts for this account. Please wait ${accountCheck.retryAfterSeconds} seconds before trying again.`,
-      values,
-    };
+  // Per-IP limit only when the IP comes from a trusted proxy. The per-account progressive delay is
+  // enforced inside Credentials authorize() (src/features/auth/authorize.ts), so it also covers
+  // direct POSTs to /api/auth/callback/credentials that never reach this action.
+  const ip = trustedClientIp(await headers());
+  if (ip) {
+    const ipCheck = authRateLimiter.check(`login:ip:${ip}`, RATE_LIMITS.LOGIN_IP);
+    if (!ipCheck.allowed) {
+      return {
+        error: `Too many sign-in attempts from this network. Please wait ${ipCheck.retryAfterSeconds} seconds before trying again.`,
+        values,
+      };
+    }
   }
 
   try {
@@ -111,9 +106,11 @@ export async function loginAction(_prev: AuthFormState, formData: FormData): Pro
     });
   } catch (error) {
     if (error instanceof AuthError) {
+      const rateLimited = error.type === "CredentialsSignin" && (error as { code?: string }).code === "rate_limited";
       return {
-        error:
-          error.type === "CredentialsSignin"
+        error: rateLimited
+          ? "This account is receiving too many sign-in attempts right now. Please wait a minute and try again."
+          : error.type === "CredentialsSignin"
             ? "Invalid email or password."
             : "Something went wrong while signing in. Please try again.",
         values,
